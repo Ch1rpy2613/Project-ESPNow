@@ -64,6 +64,7 @@ https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择�
 
 对于已编译的二进制bin文件，你通常会得到一堆bin文件，你只需要xxx.ino.bin 以及 xxx.ino.bootloader.bin 以及 xxx.ino.partitions.bin
 其顺序和烧录地址如下：
+
 ![6bbc1be7cedc9fd12f9a844735493b5](https://github.com/user-attachments/assets/88259832-018c-4c3b-8c12-e20f420bb7ed)
 
 右下角的COM为你的端口，请自行选择你的端口。

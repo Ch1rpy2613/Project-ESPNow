@@ -1,5 +1,11 @@
 # Project-ESPNow
 未命名，可称为无线小纸条，无线同步触摸或者其他任意二创/开发名称
 此为开源项目，适用于常见的ESP32-CYD总成主板。Kurio Reiko感激一切对于本项目的支持，包括语言鼓励、项目转载、代码修缮或者产品再分发。商业化销售是被允许的，但是如果有人在未经声明原创作者而直接照搬代码的商业化销售，那么他/她/它/They就是个傻逼。
+![f32e759b6bf46be3565b28ebbf2d13e](https://github.com/user-attachments/assets/697963af-9f3b-47e8-956d-c366e409f6bd)
 
-![GBC-CN  樱花大战-檄 花组入队! ](https://github.com/user-attachments/assets/cd1e1833-5718-44a5-afb9-929589fbdd72)
+
+现在提供简明烧录指北，需要的材料有：电脑、板子、数据线、手和眼睛（以Windows为例，我相信会用Linux的哥们不需要我这样的指北）
+
+万事开头
+
+ino文件烧录

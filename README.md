@@ -8,21 +8,15 @@
 
 现在提供简明烧录指北，需要的材料有：电脑、板子、数据线、手和眼睛（以Windows为例，我相信会用Linux的哥们不需要我这样的指北）
 
-#万事开头
+# 万事开头
 不难，如图安装CH340驱动
 
 ![d4d80c0dc81a3c4baa0582a49186b62](https://github.com/user-attachments/assets/46b36394-1398-42ad-bf2b-eab2394cf620)
 
 
-#ino文件烧录
+# ino文件烧录
 这是原教旨主义的编译和烧录，对ino文件有效，你可分析其代码结构逻辑，以及二创和调试
 
-##下载软件
+## 下载软件
 https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择你的版本
 ![8530af4605c7a8154c7da3b1ee96273](https://github.com/user-attachments/assets/0cfb522a-4bcd-4fe0-ae9b-543b141c9642)
-目标
-原理
-## 目标
-
-
-### 原理

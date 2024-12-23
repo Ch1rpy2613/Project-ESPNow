@@ -20,3 +20,9 @@
 ##下载软件
 https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择你的版本
 ![8530af4605c7a8154c7da3b1ee96273](https://github.com/user-attachments/assets/0cfb522a-4bcd-4fe0-ae9b-543b141c9642)
+目标
+原理
+## 目标
+
+
+### 原理

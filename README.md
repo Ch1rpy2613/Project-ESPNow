@@ -74,4 +74,4 @@ ps：如果可以，你可以尝试把SPI SPEED跳到80MHz，把SPI MODE调成QI
 
 
 
-## 总之非常感谢你能读到这里，如果有兴趣，可以移步至我的个人b站账号https://space.bilibili.com/341918869?spm_id_from=333.1296.0.0
+## 总之非常感谢你能读到这里，如果有兴趣，可以移步至我的个人b站账号https://space.bilibili.com/341918869?spm_id_from=333.1296.0.0 以及相关吹水群391437320

@@ -9,11 +9,12 @@ http://www.lcdwiki.com/zh/2.8inch_ESP32-32E_Display
 ![f32e759b6bf46be3565b28ebbf2d13e](https://github.com/user-attachments/assets/9870ed31-667e-4ff3-ab37-1c473c22b1a5)
 
 
-现在提供简明烧录指北，需要的材料有：电脑、板子、数据线、手和眼睛（以Windows为例，我相信会用Linux的哥们不需要我这样的指北）
+现在提供简明烧录指北，需要的材料有：电脑、板子、数据线、手和眼睛（以Windows为例，我相信会用Linux和MAC的哥们不需要我这样的指北）
 
 ## 万事开头
-不难，如图安装CH340驱动。无论哪种方式这都是必要的
-前往本仓库下载或使用国内镜像 [国内镜像云盘 密码:fb8b](https://charley-x.lanzoue.com/iMFNB2ixzk1a)。
+不难，如图安装CH340驱动。无论哪种方式这都是必要的    
+前往本仓库下载或使用国内镜像 [国内镜像云盘 密码:fb8b](https://charley-x.lanzoue.com/iMFNB2ixzk1a)
+
 
 ![d4d80c0dc81a3c4baa0582a49186b62](https://github.com/user-attachments/assets/46b36394-1398-42ad-bf2b-eab2394cf620)
 
@@ -23,7 +24,7 @@ http://www.lcdwiki.com/zh/2.8inch_ESP32-32E_Display
 这是原教旨主义的编译和烧录，对ino文件有效，你可分析其代码结构逻辑，以及二创和调试
 
 ### 1.下载软件和库
-https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择你的版本
+去[官网](https://www.arduino.cc/en/software)把Arduino IDE下载好，选择你的版本
 
 ![8530af4605c7a8154c7da3b1ee96273](https://github.com/user-attachments/assets/0cfb522a-4bcd-4fe0-ae9b-543b141c9642)
 
@@ -57,8 +58,9 @@ https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择�
 俗话说，Facker VS Bin，这和我们现在干的事情一点关系都没有。bin文件烧录适合在懒得研究Arduino IDE的情况下直接快速烧录出成品。但是bin文件不具备学习和代码调试相关的一切功能。但是他快，适合量产或者小白更新软件。
 
 ### 1.下载软件
-现在马上立刻，去把首页flash_download_tool_3.9.3.zip下载下来然后解压，打开flash_download_tool_3.9.3.exe
-前往本仓库下载或使用国内镜像 [国内镜像云盘](https://charley-x.lanzoue.com/iS4C82ixzllg)。
+现在马上立刻，去把首页flash_download_tool_3.9.3.zip下载下来然后解压，打开flash_download_tool_3.9.3.exe   
+前往本仓库下载或使用国内镜像 [国内镜像云盘](https://charley-x.lanzoue.com/iS4C82ixzllg)    
+
 
 ### 2.选择版本
 如图

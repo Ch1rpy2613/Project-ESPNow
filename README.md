@@ -13,7 +13,7 @@ http://www.lcdwiki.com/zh/2.8inch_ESP32-32E_Display
 
 ## 万事开头
 不难，如图安装CH340驱动。无论哪种方式这都是必要的
-前往本仓库下载或使用国内镜像（https://charley-x.lanzoue.com/iMFNB2ixzk1a 密码:fb8b）
+前往本仓库下载或使用国内镜像 [国内镜像云盘 密码:fb8b](https://charley-x.lanzoue.com/iMFNB2ixzk1a)。
 
 ![d4d80c0dc81a3c4baa0582a49186b62](https://github.com/user-attachments/assets/46b36394-1398-42ad-bf2b-eab2394cf620)
 
@@ -58,7 +58,7 @@ https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择�
 
 ### 1.下载软件
 现在马上立刻，去把首页flash_download_tool_3.9.3.zip下载下来然后解压，打开flash_download_tool_3.9.3.exe
-前往本仓库下载或使用国内镜像（https://charley-x.lanzoue.com/iS4C82ixzllg）
+前往本仓库下载或使用国内镜像 [国内镜像云盘](https://charley-x.lanzoue.com/iS4C82ixzllg)。
 
 ### 2.选择版本
 如图

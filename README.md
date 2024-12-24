@@ -13,6 +13,7 @@ http://www.lcdwiki.com/zh/2.8inch_ESP32-32E_Display
 
 ## 万事开头
 不难，如图安装CH340驱动。无论哪种方式这都是必要的
+前往本仓库下载或使用国内镜像（https://charley-x.lanzoue.com/iMFNB2ixzk1a 密码:fb8b）
 
 ![d4d80c0dc81a3c4baa0582a49186b62](https://github.com/user-attachments/assets/46b36394-1398-42ad-bf2b-eab2394cf620)
 
@@ -57,6 +58,7 @@ https://www.arduino.cc/en/software，去官网把Arduino IDE下载好，选择�
 
 ### 1.下载软件
 现在马上立刻，去把首页flash_download_tool_3.9.3.zip下载下来然后解压，打开flash_download_tool_3.9.3.exe
+前往本仓库下载或使用国内镜像（https://charley-x.lanzoue.com/iS4C82ixzllg）
 
 ### 2.选择版本
 如图
@@ -78,4 +80,4 @@ ps：如果可以，你可以尝试把SPI SPEED跳到80MHz，把SPI MODE调成QI
 
 
 
-## 总之非常感谢你能读到这里，如果有兴趣，可以移步至我的个人b站账号https://space.bilibili.com/341918869?spm_id_from=333.1296.0.0 以及相关吹水群391437320
+## 总之非常感谢你能读到这里，如果有兴趣，可以移步至我的个人b站账号 https://space.bilibili.com/341918869 以及相关吹水群 391437320

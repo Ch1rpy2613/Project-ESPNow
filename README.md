@@ -63,7 +63,7 @@ http://www.lcdwiki.com/zh/2.8inch_ESP32-32E_Display
 
 
 ### 2.选择版本
-如图
+如图（图片供参考，实际你要选择的型号其实是ESP32）
 
 ![9977090efb2aa20c84130d79df0dfe7](https://github.com/user-attachments/assets/189b8aaa-ca71-48c6-a1c4-934842593171)
 

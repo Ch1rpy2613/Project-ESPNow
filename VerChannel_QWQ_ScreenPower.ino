@@ -1,3 +1,5 @@
+// 这是VerChannel的上一个版本，由群友QWQ督促完成，新版本请见1.0.5
+
 #include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 #include <TFT_eSPI.h>

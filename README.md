@@ -92,12 +92,13 @@ ps：如果可以，你可以尝试把SPI SPEED跳到80MHz，把SPI MODE调成QI
 
 岚夕Lux  百川之鱼  晓嘿君233  乡村充电宝  躺平青年  Wowaka39  鱼鱼心系天下  懒趴趴  865770394  亦晨x  WANGZHENLE  宇宙尘埃  最怕多情负美人  风  小万同学  彼岸落雁er  whyt  赤耳大仙  我有异议症  鹰鹰鹰_  桃儿卡卡  拖宝狂爱粉   Haruka1z  雾师傅千夜  Irdescent  乐高乐高乐  莱博维茨  五好少女  路过的魔法师  咸鱼  来咯个梨  三岁的随便  55181860  二环立交桥下等风雨  机械银狼  扩展爱好的筱瑶  田筒不是田筒  名字学学我别太长  有你的快递到了  AlanWalkernzy  QWQ  Miner  辛连  路过的魔法师
 
-其中，群友 机械银狼 同时负责了外壳的建模和制作，地址https://makerworld.com.cn/zh/models/771017#profileId-739370；
+其中，群友 机械银狼 同时负责了外壳的建模和制作，地址https://makerworld.com.cn/zh/models/771017#profileId-739370
 
-1.0.5版本的更新是在群友 QWQ 的督促下完成的；
+1.0.5版本的更新是在群友 QWQ 的督促下完成的
 
 群友xiao_hj909贡献了1.0.6版本更新。
 
 向以上所有人表示感谢！
+
 
 

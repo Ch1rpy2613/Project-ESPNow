@@ -1,5 +1,7 @@
 //2025.1.5更新内容：在右侧添加RGB色彩自定义功能（但是左侧四个颜色按钮暂未删除）
 //感谢群友xiao_hj909发布此项更新
+//2025.3.23更新内容：启用息屏功能，短按boot键息屏，长按两秒进入深度睡眠。息屏后红色指示灯为电源指示灯，蓝色为连接指示灯，绿色为息屏后远程更新指示灯。数值可以自由调整，均使用pwm调光，可调节亮度。
+//感谢群友2093416185（shapaper@126.com）发布此项更新
 #include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 #include <TFT_eSPI.h>
@@ -18,7 +20,10 @@
 
 // 定义 IO0 按钮引脚
 #define BUTTON_IO0 0 // GPIO 0
-
+#define TFT_BL 21 //GPIO 21 用于控制背光
+#define GREEN_LED 16 //GPIO 16 用于控制绿色LED
+#define BLUE_LED 17  // 蓝色LED
+#define RED_LED 22   // 红色LED
 #define BATTERY_PIN 34 // GPIO 34，用于读取电池电压
 
 // 校准参数
@@ -80,6 +85,12 @@ typedef struct{
   bool fly=false;
 } XY_structure;
 
+// 添加呼吸灯相关变量
+int breathBrightness = 0;        // 呼吸灯亮度
+int breathDirection = 5;         // 呼吸灯亮度变化方向和速度
+unsigned long lastBreathTime = 0; // 上次更新呼吸灯时间
+bool hasNewUpdateWhileScreenOff = false;  // 标记息屏后是否有新的更新
+
 // 创建 SPI 和触摸屏对象
 SPIClass mySpi = SPIClass(VSPI);
 XPT2046_Touchscreen ts(XPT2046_CS, XPT2046_IRQ);
@@ -126,10 +137,33 @@ uint16_t* savedScreenBuffer = nullptr;
 // 保存远程绘制数据
 std::vector<TouchData> remoteDrawings;
 
+//布尔类型存储是否息屏 true 是开
+bool isScreenOn = true;
+
+//息屏提示灯 红色是电源指示灯 蓝色是连接指示灯
+const int BLUE_LED_DIM = 14;  // 10% 亮度 (255 * 0.1 ≈ 25)
+const int RED_LED_DIM = 4;   // 5% 亮度 (255 * 0.05 ≈ 13)
+
+
+
 void setup() {
     Serial.begin(115200);
     pinMode(BUTTON_IO0, INPUT_PULLUP); // 使用内部上拉电阻
     pinMode(BATTERY_PIN, INPUT); // 设置电池引脚为输入
+
+    pinMode(GREEN_LED, OUTPUT);
+    analogWriteResolution(GREEN_LED, 8); // 设置为8位分辨率(0-255)
+    analogWriteFrequency(GREEN_LED, 5000); // 设置PWM频率为5KHz
+    analogWrite(GREEN_LED, 255); // 初始状态设为关闭
+
+    pinMode(BLUE_LED, OUTPUT);
+    pinMode(RED_LED, OUTPUT);
+    analogWriteResolution(BLUE_LED, 8);
+    analogWriteResolution(RED_LED, 8);
+    analogWriteFrequency(BLUE_LED, 5000);
+    analogWriteFrequency(RED_LED, 5000);
+    analogWrite(BLUE_LED, 255); // 初始状态关闭
+    analogWrite(RED_LED, 255);  // 初始状态关闭
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
@@ -160,6 +194,28 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
 
     drawMainInterface();
+}
+
+// 呼吸灯更新函数
+void updateBreathLED() {
+    unsigned long currentTime = millis();
+    
+    // 每10毫秒更新一次亮度
+    if (currentTime - lastBreathTime >= 10) {
+        lastBreathTime = currentTime;
+        
+        // 更新亮度
+        breathBrightness += breathDirection;
+        
+        // 当达到最大或最小亮度时，改变方向
+        if (breathBrightness >= 255 || breathBrightness <= 0) {
+            breathDirection = -breathDirection;
+            breathBrightness = constrain(breathBrightness, 0, 255);
+        }
+        
+        // 输出PWM信号到LED
+        analogWrite(GREEN_LED, 255 - breathBrightness);
+    }
 }
 
 // 读取电池电量并转换为百分比
@@ -253,6 +309,11 @@ void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPtr, i
     } else {
         // 普通触摸数据加入队列
         remoteQueue.push(incomingData);
+        //点亮LED绿灯
+        if (!isScreenOn) {
+            hasNewUpdateWhileScreenOff = true;
+            Serial.println("remote update and screen is closed, start breath effect");
+        }
     }
 }
 
@@ -677,9 +738,63 @@ void loop() {
     handleRemoteTouch();
 
     // 检测 IO0 按钮是否被按下
-    if (digitalRead(BUTTON_IO0) == LOW) {
-        Serial.println("Entering deep sleep mode...");
-        esp_deep_sleep_start();  // 进入深度睡眠模式
+    //if (digitalRead(BUTTON_IO0) == LOW) {
+    //     Serial.println("Entering deep sleep mode...");
+    //     esp_deep_sleep_start();  // 进入深度睡眠模式
+    // }
+
+    // 如果屏幕关闭且有新的更新，显示呼吸灯效果
+    if (!isScreenOn && hasNewUpdateWhileScreenOff) {
+        updateBreathLED();
+    } else {
+        analogWrite(GREEN_LED, 255); // 关闭LED
+    }
+
+    // 红色电源知识点和蓝色连接指示灯
+    if (!isScreenOn) {
+        // 如果有设备连接，点亮蓝色LED
+        if (macSet.size() > 0) {
+            analogWrite(BLUE_LED, 255 - BLUE_LED_DIM); // 10%亮度
+        } else {
+            analogWrite(BLUE_LED, 255); // 关闭蓝色LED
+        }
+        
+        // 息屏时点亮红色LED
+        analogWrite(RED_LED, 255 - RED_LED_DIM); // 5%亮度
+    } else {
+        // 屏幕开启时关闭所有指示LED
+        analogWrite(BLUE_LED, 255);
+        analogWrite(RED_LED, 255);
+    }
+
+    static unsigned long pressStartTime = 0; // 记录按下时间
+
+    if (digitalRead(BUTTON_IO0) == LOW) { // 检测按键按下
+        if (pressStartTime == 0) {
+            pressStartTime = millis();  // 记录按下的时间
+        }
+
+        if (millis() - pressStartTime >= 2000) { // 长按超过 2 秒
+            Serial.println("Entering deep sleep mode...");
+            esp_deep_sleep_start();
+        }
+    } else { // 按键释放
+        if (pressStartTime > 0 && millis() - pressStartTime < 2000) {
+            Serial.println("short click buttom");
+            // 在这里写你的普通功能
+            if (isScreenOn) {
+              Serial.println("close screen");
+              digitalWrite(TFT_BL, LOW);  // 关闭屏幕
+              isScreenOn=false;
+            } else {
+              Serial.println("open screen");
+              digitalWrite(TFT_BL, HIGH);  // 开启屏幕
+              analogWrite(GREEN_LED, 255);
+              hasNewUpdateWhileScreenOff = false;
+              isScreenOn=true;
+            }
+        }
+        pressStartTime = 0; // 复位计时
     }
 
     // 定时广播 MAC 地址
@@ -692,10 +807,9 @@ void loop() {
         if (!inCustomColorMode) {
             updateConnectedDevicesCount(); // 更新连接设备数量
         }
+        
+
         Serial.print("Connected devices: ");
         Serial.println(macSet.size());
     }
 }
-
-
-

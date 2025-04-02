@@ -144,6 +144,8 @@ bool isScreenOn = true;
 const int BLUE_LED_DIM = 14;  // 10% 亮度 (255 * 0.1 ≈ 25)
 const int RED_LED_DIM = 4;   // 5% 亮度 (255 * 0.05 ≈ 13)
 
+
+
 void setup() {
     Serial.begin(115200);
     pinMode(BUTTON_IO0, INPUT_PULLUP); // 使用内部上拉电阻
@@ -495,14 +497,7 @@ void handleLocalTouch() {
                 if (currentTime - lastLocalTouchTime > touchInterval) {
                     tft.drawPixel(mapX, mapY, currentColor);
                 } else {
-                    // 使用插值优化笔迹平滑度
-                    int steps = 5; // 插值步数，可以根据需要调整
-                    for (int i = 1; i <= steps; i++) {
-                        float t = i / (float)steps;
-                        int interpX = lastLocalPoint.x + (mapX - lastLocalPoint.x) * t;
-                        int interpY = lastLocalPoint.y + (mapY - lastLocalPoint.y) * t;
-                        tft.drawPixel(interpX, interpY, currentColor);
-                    }
+                    tft.drawLine(lastLocalPoint.x, lastLocalPoint.y, mapX, mapY, currentColor);
                 }
 
                 // 更新本地触摸点和时间
@@ -629,14 +624,7 @@ void handleRemoteTouch() {
         if (data.timestamp - lastRemoteTime > touchInterval) {
             tft.drawPixel(mapX, mapY, data.color);
         } else {
-            // 使用插值优化笔迹平滑度
-            int steps = 5; // 插值步数，可以根据需要调整
-            for (int i = 1; i <= steps; i++) {
-                float t = i / (float)steps;
-                int interpX = lastRemotePoint.x + (mapX - lastRemotePoint.x) * t;
-                int interpY = lastRemotePoint.y + (mapY - lastRemotePoint.y) * t;
-                tft.drawPixel(interpX, interpY, data.color);
-            }
+            tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, data.color);
         }
 
         // 更新远程触摸点和时间
@@ -691,14 +679,7 @@ void applyRemoteDrawings() {
         if (data.timestamp - lastRemoteTime > touchInterval) {
             tft.drawPixel(mapX, mapY, data.color);
         } else {
-            // 使用插值优化笔迹平滑度
-            int steps = 5; // 插值步数，可以根据需要调整
-            for (int i = 1; i <= steps; i++) {
-                float t = i / (float)steps;
-                int interpX = lastRemotePoint.x + (mapX - lastRemotePoint.x) * t;
-                int interpY = lastRemotePoint.y + (mapY - lastRemotePoint.y) * t;
-                tft.drawPixel(interpX, interpY, data.color);
-            }
+            tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, data.color);
         }
 
         // 更新远程触摸点和时间
@@ -718,14 +699,7 @@ void redrawRemoteDrawings() {
         if (data.timestamp - lastRemoteTime > touchInterval) {
             tft.drawPixel(mapX, mapY, data.color);
         } else {
-            // 使用插值优化笔迹平滑度
-            int steps = 5; // 插值步数，可以根据需要调整
-            for (int i = 1; i <= steps; i++) {
-                float t = i / (float)steps;
-                int interpX = lastRemotePoint.x + (mapX - lastRemotePoint.x) * t;
-                int interpY = lastRemotePoint.y + (mapY - lastRemotePoint.y) * t;
-                tft.drawPixel(interpX, interpY, data.color);
-            }
+            tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, data.color);
         }
 
         // 更新远程触摸点和时间

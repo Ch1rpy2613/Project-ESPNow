@@ -23,6 +23,10 @@ uint8_t lastPeerMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 bool initialSyncLogicProcessed = false;
 bool iamEffectivelyMoreUptimeDevice = false;
 bool iamRequestingAllData = false;
+bool isAwaitingSyncStartResponse = false;
+bool isReceivingDrawingData = false;
+bool isSendingDrawingData = false;
+size_t currentHistorySendIndex = 0; // 定义新增的全局变量
 long relativeBootTimeOffset = 0;
 unsigned long uptimeOfLastPeerSyncedFrom = 0;
 unsigned long timeRequestSentForAllDrawings = 0; // 新增：记录请求所有绘图数据的时间戳
@@ -207,11 +211,30 @@ void processIncomingMessages()
                     if (memcmp(myMacAddr, lastPeerMac, 6) < 0)
                     {
                         Serial.println("  决策 (有效运行时间相同, MAC较小): 本机行为类似较新设备：清空并请求数据。");
+                        if (iamRequestingAllData || isReceivingDrawingData || isSendingDrawingData)
+                        {
+                            Serial.println("  但当前已有同步正在进行，忽略新的同步请求发起。");
+                            lastKnownPeerUptime = peerRawUptime; // 仍然更新对端信息
+                            lastKnownPeerOffset = peerReceivedOffset;
+                            initialSyncLogicProcessed = true; // 标记已处理此 UPTIME_INFO
+                            break;
+                        }
                         iamEffectivelyMoreUptimeDevice = false;
                         iamRequestingAllData = true;
+                        isAwaitingSyncStartResponse = true; // 等待对方的 SYNC_START
                         allDrawingHistory.clear();
-                        tft.fillScreen(TFT_BLACK);
-                        drawMainInterface();
+                        // tft.fillScreen(TFT_BLACK); // 清屏操作移至收到对方 SYNC_START 后
+                        // drawMainInterface();
+
+                        // 发送同步开始信号，表明本机准备好请求并接收数据
+                        SyncMessage_t syncStartMsgBeforeRequest;
+                        syncStartMsgBeforeRequest.type = MSG_TYPE_SYNC_START;
+                        syncStartMsgBeforeRequest.senderUptime = localCurrentRawUptime;
+                        syncStartMsgBeforeRequest.senderOffset = localCurrentOffset;
+                        memset(&syncStartMsgBeforeRequest.touch_data, 0, sizeof(TouchData_t));
+                        sendSyncMessage(&syncStartMsgBeforeRequest);
+                        Serial.println("  发送 MSG_TYPE_SYNC_START (在请求所有绘图前)");
+
                         SyncMessage_t requestMsg;
                         requestMsg.type = MSG_TYPE_REQUEST_ALL_DRAWINGS;
                         requestMsg.senderUptime = localCurrentRawUptime;
@@ -244,11 +267,30 @@ void processIncomingMessages()
                     else if (localEffectiveUptime < peerEffectiveUptime)
                     {
                         Serial.println("  决策: 本机有效运行时间较短 (超出阈值)。判定本机为较新设备。清空本机数据并向对端 (较旧设备) 请求所有绘图数据。");
+                        if (iamRequestingAllData || isReceivingDrawingData || isSendingDrawingData)
+                        {
+                            Serial.println("  但当前已有同步正在进行，忽略新的同步请求发起。");
+                            lastKnownPeerUptime = peerRawUptime; // 仍然更新对端信息
+                            lastKnownPeerOffset = peerReceivedOffset;
+                            initialSyncLogicProcessed = true; // 标记已处理此 UPTIME_INFO
+                            break;
+                        }
                         iamEffectivelyMoreUptimeDevice = false;
                         iamRequestingAllData = true;
+                        isAwaitingSyncStartResponse = true; // 等待对方的 SYNC_START
                         allDrawingHistory.clear();
-                        tft.fillScreen(TFT_BLACK);
-                        drawMainInterface();
+                        // tft.fillScreen(TFT_BLACK); // 清屏操作移至收到对方 SYNC_START 后
+                        // drawMainInterface();
+
+                        // 发送同步开始信号，表明本机准备好请求并接收数据
+                        SyncMessage_t syncStartMsgBeforeRequest2;
+                        syncStartMsgBeforeRequest2.type = MSG_TYPE_SYNC_START;
+                        syncStartMsgBeforeRequest2.senderUptime = localCurrentRawUptime;
+                        syncStartMsgBeforeRequest2.senderOffset = localCurrentOffset;
+                        memset(&syncStartMsgBeforeRequest2.touch_data, 0, sizeof(TouchData_t));
+                        sendSyncMessage(&syncStartMsgBeforeRequest2);
+                        Serial.println("  发送 MSG_TYPE_SYNC_START (在请求所有绘图前 - UPTIME_INFO 路径)");
+
                         SyncMessage_t requestMsg;
                         requestMsg.type = MSG_TYPE_REQUEST_ALL_DRAWINGS;
                         requestMsg.senderUptime = localCurrentRawUptime;
@@ -280,53 +322,106 @@ void processIncomingMessages()
         }
         case MSG_TYPE_DRAW_POINT:
         {
-            allDrawingHistory.push_back(msg.touch_data);
-            TouchData_t data = msg.touch_data;
-            int mapX = data.x;
-            int mapY = data.y;
-            if (data.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0) // 使用配置中的宏
+            TouchData_t currentPointData = msg.touch_data; // Declare once at the beginning of the case
+            int mapX = currentPointData.x;
+            int mapY = currentPointData.y;
+
+            if (isReceivingDrawingData)
             {
-                tft.drawPixel(mapX, mapY, data.color);
+                // 场景1: 正在进行历史数据同步 (本机是请求方，已收到 SYNC_START)
+                Serial.println("  处理 MSG_TYPE_DRAW_POINT 作为历史同步数据。");
+                allDrawingHistory.push_back(currentPointData); // 存储历史点
+                // 绘图逻辑
+                if (currentPointData.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0)
+                {
+                    tft.drawPixel(mapX, mapY, currentPointData.color);
+                }
+                else
+                {
+                    tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, currentPointData.color);
+                }
+                lastRemotePoint.x = mapX;
+                lastRemotePoint.y = mapY;
+                lastRemotePoint.z = 1;
+                lastRemoteDrawTime = currentPointData.timestamp;
+                if (!isScreenOn)
+                    hasNewUpdateWhileScreenOff = true;
+            }
+            else if (!iamRequestingAllData && !isSendingDrawingData && !isAwaitingSyncStartResponse)
+            {
+                // 场景2: 接收实时绘制点 (本机不处于任何请求/发送全量数据的状态)
+                Serial.println("  处理 MSG_TYPE_DRAW_POINT 作为实时新笔划。");
+                allDrawingHistory.push_back(currentPointData); // 实时点也需要加入历史
+                // 绘图逻辑
+                if (currentPointData.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0)
+                {
+                    tft.drawPixel(mapX, mapY, currentPointData.color);
+                }
+                else
+                {
+                    tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, currentPointData.color);
+                }
+                lastRemotePoint.x = mapX;
+                lastRemotePoint.y = mapY;
+                lastRemotePoint.z = 1;
+                lastRemoteDrawTime = currentPointData.timestamp;
+                if (!isScreenOn)
+                    hasNewUpdateWhileScreenOff = true;
             }
             else
             {
-                tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, data.color);
+                // 场景3: 正在等待同步开始、或本机正在发送数据、或本机正在请求但还未收到对方SYNC_START
+                Serial.print("  收到 MSG_TYPE_DRAW_POINT 但本机处于中间同步状态 (");
+                Serial.print("iamRequestingAllData: ");
+                Serial.print(iamRequestingAllData);
+                Serial.print(", isReceivingDrawingData: ");
+                Serial.print(isReceivingDrawingData);
+                Serial.print(", isSendingDrawingData: ");
+                Serial.print(isSendingDrawingData);
+                Serial.print(", isAwaitingSyncStartResponse: ");
+                Serial.print(isAwaitingSyncStartResponse);
+                Serial.println(")，忽略此点。");
             }
-            lastRemotePoint = {mapX, mapY, 1};
-            lastRemoteDrawTime = data.timestamp;
-            if (!isScreenOn)
-                hasNewUpdateWhileScreenOff = true;
             break;
         }
         case MSG_TYPE_REQUEST_ALL_DRAWINGS:
         {
             Serial.println("收到 MSG_TYPE_REQUEST_ALL_DRAWINGS.");
-            if (localEffectiveUptime > peerEffectiveUptime)
+            if (localEffectiveUptime > peerEffectiveUptime) // 本机是较旧设备，应该响应
             {
+                if (iamRequestingAllData || isReceivingDrawingData || isSendingDrawingData)
+                {
+                    Serial.println("  但本机正在进行其他同步操作，忽略此新的 REQUEST_ALL_DRAWINGS 请求。");
+                    if (peerRawUptime != 0)
+                        lastKnownPeerUptime = peerRawUptime;
+                    if (peerReceivedOffset != 0 || lastKnownPeerOffset != 0)
+                        lastKnownPeerOffset = peerReceivedOffset;
+                    initialSyncLogicProcessed = true;
+                    break;
+                }
+
                 Serial.print("  决策: 本机有效运行时间较长。发送所有 ");
                 Serial.print(allDrawingHistory.size());
                 Serial.println(" 个点。");
                 iamEffectivelyMoreUptimeDevice = true;
+                // isSendingDrawingData = true; // isSendingDrawingData 将在下面设置
                 lastKnownPeerUptime = peerRawUptime;
                 lastKnownPeerOffset = peerReceivedOffset;
                 initialSyncLogicProcessed = true;
-                for (const auto &drawData : allDrawingHistory)
-                {
-                    SyncMessage_t historyPointMsg;
-                    historyPointMsg.type = MSG_TYPE_DRAW_POINT;
-                    historyPointMsg.senderUptime = localCurrentRawUptime;
-                    historyPointMsg.senderOffset = localCurrentOffset;
-                    historyPointMsg.touch_data = drawData;
-                    sendSyncMessage(&historyPointMsg);
-                    delay(10);
-                }
-                SyncMessage_t completeMsg;
-                completeMsg.type = MSG_TYPE_ALL_DRAWINGS_COMPLETE;
-                completeMsg.senderUptime = localCurrentRawUptime;
-                completeMsg.senderOffset = localCurrentOffset;
-                memset(&completeMsg.touch_data, 0, sizeof(TouchData_t));
-                sendSyncMessage(&completeMsg);
-                Serial.println("  所有绘图数据已发送。发送了 ALL_DRAWINGS_COMPLETE。");
+
+                // 发送同步开始信号给请求方，表明本机即将开始发送数据
+                SyncMessage_t syncStartMsgBeforeSending;
+                syncStartMsgBeforeSending.type = MSG_TYPE_SYNC_START;
+                syncStartMsgBeforeSending.senderUptime = localCurrentRawUptime;
+                syncStartMsgBeforeSending.senderOffset = localCurrentOffset;
+                memset(&syncStartMsgBeforeSending.touch_data, 0, sizeof(TouchData_t));
+                sendSyncMessage(&syncStartMsgBeforeSending);
+                Serial.println("  发送 MSG_TYPE_SYNC_START (准备发送历史数据，将开始分批发送)");
+
+                // 设置状态以开始分批发送，实际发送将在 processIncomingMessages 末尾的逻辑中进行
+                isSendingDrawingData = true;
+                currentHistorySendIndex = 0;
+                // 原有的 for 循环发送逻辑已移除
             }
             else
             {
@@ -342,20 +437,30 @@ void processIncomingMessages()
         case MSG_TYPE_ALL_DRAWINGS_COMPLETE:
         {
             Serial.println("收到 MSG_TYPE_ALL_DRAWINGS_COMPLETE.");
-            if (iamRequestingAllData && !iamEffectivelyMoreUptimeDevice)
+            if (isReceivingDrawingData)
             {
-                Serial.println("  同步完成 (本机为较新设备)。");
-                // iamRequestingAllData = false; // 在计算后重置，以确保 timeRequestSentForAllDrawings 的有效性
-                if (timeRequestSentForAllDrawings != 0) {
-                    relativeBootTimeOffset = (long)peerRawUptime + (long)peerReceivedOffset - (long)timeRequestSentForAllDrawings;
-                    Serial.println("  使用 timeRequestSentForAllDrawings 计算 offset");
-                } else {
-                    // Fallback or error, should not happen if logic is correct
-                    relativeBootTimeOffset = (long)peerRawUptime + (long)peerReceivedOffset - (long)millis();
-                    Serial.println("  警告: timeRequestSentForAllDrawings 为 0, 使用 millis() 计算 offset");
+                Serial.println("  同步完成 (本机为较新设备，已接收完数据)。");
+
+                // 使用 SNTP-like 的时间同步方法：
+                // Offset = (服务器发送时间戳 + 服务器已知偏移) - 客户端接收时间戳
+                // localCurrentRawUptime 是在处理此消息时本机的 millis()
+                relativeBootTimeOffset = (long)peerRawUptime + (long)peerReceivedOffset - localCurrentRawUptime;
+                Serial.println("  使用 localCurrentRawUptime (SNTP-like) 计算 offset");
+
+                // 记录一下 timeRequestSentForAllDrawings 的状态，但它不再用于主要计算
+                if (timeRequestSentForAllDrawings == 0) {
+                    Serial.println("  警告: timeRequestSentForAllDrawings 为 0 (本应在请求时设置).");
                 }
-                iamRequestingAllData = false; // 现在重置
-                timeRequestSentForAllDrawings = 0; // 重置时间戳，避免下次误用
+                // else {
+                //    long rtt_approx = localCurrentRawUptime - timeRequestSentForAllDrawings;
+                //    Serial.print("  近似 RTT: "); Serial.println(rtt_approx);
+                // }
+
+
+                iamRequestingAllData = false;
+                isReceivingDrawingData = false;
+                isAwaitingSyncStartResponse = false;
+                timeRequestSentForAllDrawings = 0;
                 uptimeOfLastPeerSyncedFrom = peerRawUptime;
                 Serial.print("  relativeBootTimeOffset 计算并设置为: ");
                 Serial.println(relativeBootTimeOffset);
@@ -381,9 +486,41 @@ void processIncomingMessages()
                 Serial.println(")");
                 initialSyncLogicProcessed = true;
             }
+            else if (iamRequestingAllData && isAwaitingSyncStartResponse) // 异常：等待SYNC_START却收到COMPLETE
+            {
+                Serial.println("  异常：正在等待 SYNC_START，却收到了 ALL_DRAWINGS_COMPLETE。可能同步中断。重新发起请求。");
+                // 状态: iamRequestingAllData = true, isAwaitingSyncStartResponse = true (保持)
+
+                // 重新发送 SYNC_START (表明本机意图，因为我们仍想同步)
+                SyncMessage_t syncStartMsgRetry;
+                syncStartMsgRetry.type = MSG_TYPE_SYNC_START;
+                syncStartMsgRetry.senderUptime = localCurrentRawUptime; // 使用当前时间
+                syncStartMsgRetry.senderOffset = localCurrentOffset;
+                memset(&syncStartMsgRetry.touch_data, 0, sizeof(TouchData_t));
+                sendSyncMessage(&syncStartMsgRetry);
+                Serial.println("  重新发送 MSG_TYPE_SYNC_START (在重新请求所有绘图前)");
+
+                // 重新发送 REQUEST_ALL_DRAWINGS
+                SyncMessage_t requestMsgRetry;
+                requestMsgRetry.type = MSG_TYPE_REQUEST_ALL_DRAWINGS;
+                requestMsgRetry.senderUptime = localCurrentRawUptime; // 使用当前时间
+                requestMsgRetry.senderOffset = localCurrentOffset;
+                memset(&requestMsgRetry.touch_data, 0, sizeof(TouchData_t));
+                sendSyncMessage(&requestMsgRetry);
+                timeRequestSentForAllDrawings = millis(); // 更新请求时间戳
+                Serial.println("  重新发送 MSG_TYPE_REQUEST_ALL_DRAWINGS.");
+                
+                // 更新对端信息，因为这仍然是来自对端的最新（尽管可能是异常的）消息
+                lastKnownPeerUptime = peerRawUptime;
+                lastKnownPeerOffset = peerReceivedOffset;
+                initialSyncLogicProcessed = true; // 标记已处理此消息
+            }
             else
             {
-                Serial.println("  收到 ALL_DRAWINGS_COMPLETE，但本机状态不符。忽略。");
+                Serial.println("  收到 ALL_DRAWINGS_COMPLETE，但本机状态不符 (非正常完成，也非等待SYNC_START时收到)。忽略。");
+                // 考虑是否也更新对端信息
+                // lastKnownPeerUptime = peerRawUptime;
+                // lastKnownPeerOffset = peerReceivedOffset;
             }
             break;
         }
@@ -395,18 +532,34 @@ void processIncomingMessages()
             if (localEffectiveUptime < peerEffectiveUptime && effectiveUptimeDifference > EFFECTIVE_UPTIME_SYNC_THRESHOLD)
             {
                 Serial.println("  决策: 本机有效运行时间较短 (超出阈值)。执行清空并请求。");
+                if (iamRequestingAllData || isReceivingDrawingData || isSendingDrawingData)
+                {
+                    Serial.println("  但当前已有同步正在进行，忽略新的 CLEAR_AND_REQUEST_UPDATE 触发的同步请求。");
+                    lastKnownPeerUptime = peerRawUptime;
+                    lastKnownPeerOffset = peerReceivedOffset;
+                    initialSyncLogicProcessed = true;
+                    break;
+                }
                 iamEffectivelyMoreUptimeDevice = false;
                 iamRequestingAllData = true;
+                isAwaitingSyncStartResponse = true;
                 allDrawingHistory.clear();
-                tft.fillScreen(TFT_BLACK);
-                drawMainInterface();
+
+                SyncMessage_t syncStartMsgBeforeRequest3;
+                syncStartMsgBeforeRequest3.type = MSG_TYPE_SYNC_START;
+                syncStartMsgBeforeRequest3.senderUptime = localCurrentRawUptime;
+                syncStartMsgBeforeRequest3.senderOffset = localCurrentOffset;
+                memset(&syncStartMsgBeforeRequest3.touch_data, 0, sizeof(TouchData_t));
+                sendSyncMessage(&syncStartMsgBeforeRequest3);
+                Serial.println("  发送 MSG_TYPE_SYNC_START (在请求所有绘图前 - CLEAR_AND_REQUEST_UPDATE 路径)");
+
                 SyncMessage_t requestMsg;
                 requestMsg.type = MSG_TYPE_REQUEST_ALL_DRAWINGS;
                 requestMsg.senderUptime = localCurrentRawUptime;
                 requestMsg.senderOffset = localCurrentOffset;
                 memset(&requestMsg.touch_data, 0, sizeof(TouchData_t));
                 sendSyncMessage(&requestMsg);
-                timeRequestSentForAllDrawings = millis(); // 记录发送请求的时间
+                timeRequestSentForAllDrawings = millis();
                 lastKnownPeerUptime = peerRawUptime;
                 lastKnownPeerOffset = peerReceivedOffset;
                 initialSyncLogicProcessed = true;
@@ -425,12 +578,14 @@ void processIncomingMessages()
         case MSG_TYPE_RESET_CANVAS:
         {
             Serial.println("收到 MSG_TYPE_RESET_CANVAS.");
-            // allDrawingHistory.clear(); tft.fillScreen(TFT_BLACK); drawMainInterface(); // 旧的，现在用 clearScreenAndCache
             allDrawingHistory.clear();
-            clearScreenAndCache(); // 使用 Project-ESPNow.ino 中的函数
+            clearScreenAndCache();
             relativeBootTimeOffset = 0;
             iamEffectivelyMoreUptimeDevice = false;
             iamRequestingAllData = false;
+            isAwaitingSyncStartResponse = false;
+            isReceivingDrawingData = false;
+            isSendingDrawingData = false;
             initialSyncLogicProcessed = false;
             lastKnownPeerUptime = 0;
             lastKnownPeerOffset = 0;
@@ -446,44 +601,145 @@ void processIncomingMessages()
                 hasNewUpdateWhileScreenOff = true;
             break;
         }
+        case MSG_TYPE_SYNC_START:
+        {
+            Serial.println("收到 MSG_TYPE_SYNC_START");
+            if (iamRequestingAllData && isAwaitingSyncStartResponse && !iamEffectivelyMoreUptimeDevice)
+            {
+                Serial.println("  本机作为请求方，收到响应方的 SYNC_START。准备清空并接收数据。");
+                allDrawingHistory.clear();
+                clearScreenAndCache();
+                lastRemotePoint.x = 0;
+                lastRemotePoint.y = 0;
+                lastRemotePoint.z = 0;
+                lastRemoteDrawTime = 0;
+
+                isAwaitingSyncStartResponse = false;
+                isReceivingDrawingData = true;
+
+                lastKnownPeerUptime = peerRawUptime;
+                lastKnownPeerOffset = peerReceivedOffset;
+                Serial.print("  屏幕已清空。准备从对端 (raw uptime: ");
+                Serial.print(peerRawUptime);
+                Serial.println(") 同步数据。");
+            }
+            else if (isSendingDrawingData)
+            {
+                Serial.println("  本机正在发送数据，但收到了一个 SYNC_START。可能是对方也想发起同步。忽略此 SYNC_START，继续本机发送流程。");
+            }
+            else if (isReceivingDrawingData)
+            {
+                Serial.println("  本机正在接收数据，又收到了一个 SYNC_START。可能是重复信号或来自不同设备的干扰。忽略。");
+            }
+            else
+            {
+                Serial.println("  收到 SYNC_START，但本机状态不符 (非明确的请求/响应流程中)。可能是一个错序或无关的信号。");
+                lastKnownPeerUptime = peerRawUptime;
+                lastKnownPeerOffset = peerReceivedOffset;
+            }
+            break;
+        }
         default:
         {
             Serial.print("收到未知消息类型: ");
             Serial.println(msg.type);
             break;
         }
+        } // End of switch (msg.type)
+    } // End of while (!incomingMessageQueue.empty())
+
+    // --- 分批发送历史数据逻辑 ---
+    if (isSendingDrawingData)
+    {
+        const size_t BATCH_SIZE = 15; // 每批发送15个点
+        size_t pointsSentThisCycle = 0;
+        unsigned long batchSendStartTime = millis();        // 用于该批次消息的时间戳
+        unsigned long currentSenderUptimeForMsg = millis(); // 获取一次，用于本批次所有消息
+        long currentSenderOffsetForMsg = relativeBootTimeOffset;
+
+        while (currentHistorySendIndex < allDrawingHistory.size() && pointsSentThisCycle < BATCH_SIZE)
+        {
+            const auto &drawData = allDrawingHistory[currentHistorySendIndex];
+
+            SyncMessage_t historyPointMsg;
+            historyPointMsg.type = MSG_TYPE_DRAW_POINT;
+            historyPointMsg.senderUptime = currentSenderUptimeForMsg;
+            historyPointMsg.senderOffset = currentSenderOffsetForMsg;
+            historyPointMsg.touch_data = drawData;
+
+            sendSyncMessage(&historyPointMsg);
+            delay(5); // 在每个点发送后加入一个小的 delay(1)
+
+            currentHistorySendIndex++;
+            pointsSentThisCycle++;
+        }
+
+        if (currentHistorySendIndex >= allDrawingHistory.size())
+        {
+            // 所有数据点已发送完毕
+            SyncMessage_t completeMsg;
+            completeMsg.type = MSG_TYPE_ALL_DRAWINGS_COMPLETE;
+            completeMsg.senderUptime = millis();
+            completeMsg.senderOffset = relativeBootTimeOffset;
+            memset(&completeMsg.touch_data, 0, sizeof(TouchData_t));
+            sendSyncMessage(&completeMsg);
+
+            Serial.println("  所有历史绘图数据已分批发送完毕。发送了 ALL_DRAWINGS_COMPLETE。");
+            isSendingDrawingData = false;
+            // currentHistorySendIndex = 0; // 可以在下次开始发送时再重置
+        }
+        else if (pointsSentThisCycle > 0)
+        {
+            // 当前批次已发送，但还有更多数据
+            Serial.print("  分批发送：已发送 ");
+            Serial.print(pointsSentThisCycle);
+            Serial.print(" 个点，总计已发送 ");
+            Serial.print(currentHistorySendIndex);
+            Serial.print("/");
+            Serial.print(allDrawingHistory.size());
+            Serial.println(" 个点。");
+        }
+        // 如果仍在发送过程中 (isSendingDrawingData 仍为 true 且还有数据)，让出CPU
+        if (isSendingDrawingData && currentHistorySendIndex < allDrawingHistory.size())
+        {
+            yield();
         }
     }
-}
+} // End of processIncomingMessages()
 
 // 重播所有绘图历史 (在屏幕上重新绘制所有点和线)
 void replayAllDrawings()
 {
-    lastRemotePoint = {0, 0, 0}; // 重置远程最后一点，以便从头开始绘制
-    lastRemoteDrawTime = 0;      // 重置远程最后绘制时间
+    lastRemotePoint.x = 0;
+    lastRemotePoint.y = 0;
+    lastRemotePoint.z = 0;
+    lastRemoteDrawTime = 0;
 
-    for (const auto &data : allDrawingHistory)
+    for (const auto &drawData : allDrawingHistory)
     {
-        if (data.isReset)
-        {                                        // 如果是重置操作
-            tft.fillScreen(TFT_BLACK);           // 清屏
-            drawMainInterface();                 // 重绘主界面
-            lastRemotePoint = {0, 0, 0};         // 重置状态
-            lastRemoteDrawTime = data.timestamp; // 更新时间戳
-            continue;                            // 继续处理下一个历史记录
-        }
-        int mapX = data.x;
-        int mapY = data.y;
-        // 根据时间戳判断是画点还是画线
-        if (data.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0) // 使用配置中的宏
+        if (drawData.isReset)
         {
-            tft.drawPixel(mapX, mapY, data.color); // 画点
+            tft.fillScreen(TFT_BLACK);
+            drawMainInterface();
+            lastRemotePoint.x = 0;
+            lastRemotePoint.y = 0;
+            lastRemotePoint.z = 0;
+            lastRemoteDrawTime = drawData.timestamp;
+            continue;
+        }
+        int mapX = drawData.x;
+        int mapY = drawData.y;
+        if (drawData.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0)
+        {
+            tft.drawPixel(mapX, mapY, drawData.color);
         }
         else
         {
-            tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, data.color); // 画线
+            tft.drawLine(lastRemotePoint.x, lastRemotePoint.y, mapX, mapY, drawData.color);
         }
-        lastRemotePoint = {mapX, mapY, 1};   // 更新远程最后一点
-        lastRemoteDrawTime = data.timestamp; // 更新远程最后绘制时间
+        lastRemotePoint.x = mapX;
+        lastRemotePoint.y = mapY;
+        lastRemotePoint.z = 1;
+        lastRemoteDrawTime = drawData.timestamp;
     }
 }

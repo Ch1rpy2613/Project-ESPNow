@@ -31,7 +31,8 @@ enum MessageType_e // 使用 _e 后缀表示 enum
     MSG_TYPE_REQUEST_ALL_DRAWINGS,
     MSG_TYPE_ALL_DRAWINGS_COMPLETE,
     MSG_TYPE_CLEAR_AND_REQUEST_UPDATE,
-    MSG_TYPE_RESET_CANVAS
+    MSG_TYPE_RESET_CANVAS,
+    MSG_TYPE_SYNC_START // 新增：同步开始信号
 };
 typedef enum MessageType_e MessageType_t; // Typedef for the enum
 
@@ -57,6 +58,10 @@ extern uint8_t lastPeerMac[6];
 extern bool initialSyncLogicProcessed;
 extern bool iamEffectivelyMoreUptimeDevice;
 extern bool iamRequestingAllData;
+extern bool isAwaitingSyncStartResponse; 
+extern bool isReceivingDrawingData;    
+extern bool isSendingDrawingData;        
+extern size_t currentHistorySendIndex;   // 新增：用于分批发送历史记录的当前索引
 extern long relativeBootTimeOffset;
 extern unsigned long uptimeOfLastPeerSyncedFrom;
 

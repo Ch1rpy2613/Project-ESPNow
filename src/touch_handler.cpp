@@ -150,8 +150,10 @@ void handleLocalTouch() {
                     resetMsg.touch_data.color = currentColor; // currentColor 来自 ui_manager
                     sendSyncMessage(&resetMsg); // sendSyncMessage 来自 esp_now_handler
                     
-                    // 同时将复位添加到本地历史 (虽然刚被清除，但这标记了复位点)
-                    allDrawingHistory.push_back(resetMsg.touch_data); 
+                    // 本地绘图历史 (allDrawingHistory) 已被清除。
+                    // 屏幕和UI缓存 (clearScreenAndCache()) 已被清除。
+                    // 复位消息已发送通知对端设备进行清除。
+                    // 根据新的逻辑，不再将此复位操作作为点位记录到本地历史中。
                     return; // 操作已处理
                 }
 

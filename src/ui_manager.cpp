@@ -304,6 +304,7 @@ void restoreSavedScreenArea() {
 }
 
 void clearScreenAndCache() { // 这是一个主要重置操作
+    allDrawingHistory.clear();
     tft.fillScreen(TFT_BLACK);
     drawMainInterface();
     

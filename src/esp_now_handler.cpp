@@ -426,6 +426,7 @@ void processIncomingMessages()
         {
             Serial.println("收到 MSG_TYPE_RESET_CANVAS.");
             // allDrawingHistory.clear(); tft.fillScreen(TFT_BLACK); drawMainInterface(); // 旧的，现在用 clearScreenAndCache
+            allDrawingHistory.clear();
             clearScreenAndCache(); // 使用 Project-ESPNow.ino 中的函数
             relativeBootTimeOffset = 0;
             iamEffectivelyMoreUptimeDevice = false;

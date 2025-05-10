@@ -93,4 +93,33 @@
 #define MIN_UPTIME_DIFF_FOR_NEW_SYNC_TARGET 200UL // 选择新的同步目标时，对端设备最小原始运行时间差异 (毫秒) - 用于迟滞判断
 #define EFFECTIVE_UPTIME_SYNC_THRESHOLD 1000UL    // 有效运行时间同步阈值 (毫秒) - 在此阈值内的差异不触发新的同步以避免抖动
 
+// 调试信息切换按钮位置和大小
+#define DEBUG_TOGGLE_BUTTON_X 2                     // 按钮 X 坐标 (左下角)
+#define DEBUG_TOGGLE_BUTTON_W 20                    // 按钮宽度
+#define DEBUG_TOGGLE_BUTTON_H 20                    // 按钮高度
+#define DEBUG_TOGGLE_BUTTON_Y (SCREEN_HEIGHT - DEBUG_TOGGLE_BUTTON_H - 2) // 按钮 Y 坐标
+
+// 圆形进度条相关定义
+#define PROGRESS_CIRCLE_RADIUS 8
+#define PROGRESS_CIRCLE_THICKNESS 3
+#define SEND_PROGRESS_X (RESET_BUTTON_X + PROGRESS_CIRCLE_RADIUS) // 与重置按钮左对齐，并考虑半径
+#define SEND_PROGRESS_Y (SLEEP_BUTTON_Y + SLEEP_BUTTON_H + PROGRESS_CIRCLE_RADIUS + 5) // 休眠按钮下方
+#define RECEIVE_PROGRESS_X SEND_PROGRESS_X
+#define RECEIVE_PROGRESS_Y (SEND_PROGRESS_Y + 2 * PROGRESS_CIRCLE_RADIUS + 5) // 发送进度条下方
+#define PROGRESS_SEND_COLOR TFT_BLUE
+#define PROGRESS_RECEIVE_COLOR TFT_GREEN
+#define PROGRESS_BG_COLOR TFT_DARKGREY
+
+// 项目信息按钮 (调试界面上方)
+#define INFO_BUTTON_W 15
+#define INFO_BUTTON_H 15
+#define INFO_BUTTON_X (2 + 120 - INFO_BUTTON_W - 2) // 调试信息框 (startX=2, width=120) 右上角
+#define INFO_BUTTON_Y (SCREEN_HEIGHT - 42 - INFO_BUTTON_H - 2) // 调试信息框 (startY=SCREEN_HEIGHT-42) 上方
+
+// "Coffee" 按钮 (调试按钮上方)
+#define COFFEE_BUTTON_X DEBUG_TOGGLE_BUTTON_X      // 与调试按钮 X 坐标相同
+#define COFFEE_BUTTON_W DEBUG_TOGGLE_BUTTON_W      // 与调试按钮宽度相同
+#define COFFEE_BUTTON_H DEBUG_TOGGLE_BUTTON_H      // 与调试按钮高度相同
+#define COFFEE_BUTTON_Y (DEBUG_TOGGLE_BUTTON_Y - COFFEE_BUTTON_H - 2) // 在调试按钮上方，间隔2像素
+
 #endif // CONFIG_H

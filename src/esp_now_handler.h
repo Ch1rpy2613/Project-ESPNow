@@ -42,6 +42,7 @@ typedef struct SyncMessage_s
     unsigned long senderUptime;
     long senderOffset;
     TouchData_t touch_data;
+    uint16_t totalPointsForSync; // 新增：用于同步开始时告知总点数
 } SyncMessage_t;
 
 

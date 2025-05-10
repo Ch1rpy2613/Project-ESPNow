@@ -99,6 +99,23 @@ void handleLocalTouch() {
     XY_TouchPoint_t xy1;
 
     if (touched) {
+        // 首先处理弹窗关闭逻辑 (Coffee 弹窗优先于项目信息弹窗，如果两者都可能存在)
+        if (isCoffeePopupVisible) {
+            xy1 = averageXY(); // 确认是有效触摸
+            if (!xy1.fly) {
+                hideCoffeePopup(); // 关闭 Coffee 弹窗
+                lastLocalPoint.z = 0; // 标记为无触摸
+                return; // 操作已处理
+            }
+        } else if (isProjectInfoPopupVisible) { // 然后处理项目信息弹窗的关闭逻辑
+            xy1 = averageXY(); 
+            if (!xy1.fly) { 
+                 hideProjectInfoPopup(); // 关闭弹窗
+                 lastLocalPoint.z = 0; // 标记为无触摸，避免后续处理
+                 return; // 操作已处理
+            }
+        }
+
         xy1 = averageXY(); // 获取滤波后的触摸点
         x1 = xy1.x;
         y1 = xy1.y;
@@ -111,6 +128,35 @@ void handleLocalTouch() {
             if (inCustomColorMode) { // 如果处于自定义颜色选择模式
                 handleCustomColorTouch(mapX, mapY); // 传递给UI管理器的自定义颜色处理函数
             } else { // 正常绘图/按钮模式
+                // 检查 "Coffee" 按钮
+                if (showDebugToggleButton && isCoffeeButtonPressed(mapX, mapY)) { // D按钮显示时C按钮才有效
+                    showCoffeePopup();
+                    return; // 操作已处理
+                }
+
+                // 检查项目信息按钮
+                if (isDebugInfoVisible && isInfoButtonPressed(mapX, mapY)) {
+                    showProjectInfoPopup();
+                    return; // 操作已处理
+                }
+
+                // 首先检查调试相关按钮的点击
+                // 注意：Coffee 按钮的检查已在其之前
+                if (isDebugInfoVisible) { 
+                    // 点击调试信息框本身来切换 (InfoButton 和 CoffeeButton 已被优先处理)
+                    if (mapX >= 2 && mapX <= 122 && mapY >= (SCREEN_HEIGHT - 42) && mapY <= SCREEN_HEIGHT) {
+                        if (!isInfoButtonPressed(mapX, mapY)) { // 确保不是误点InfoButton区域
+                             toggleDebugInfo();
+                             return; // 操作已处理
+                        }
+                    }
+                } else if (showDebugToggleButton) { // 如果调试切换按钮可见 (D按钮)
+                    if (isDebugToggleButtonPressed(mapX, mapY)) {
+                        toggleDebugInfo();
+                        return; // 操作已处理
+                    }
+                }
+
                 // 检查复位按钮是否按下
                 if (isResetButtonPressed(mapX, mapY)) {
                     if (currentRawUptime - lastResetTime < 1000) { // 检查快速按下 (彩蛋)

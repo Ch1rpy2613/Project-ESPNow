@@ -1,7 +1,8 @@
 #include "esp_now_handler.h"
-#include "config.h"  // 包含项目配置常量
-#include <Arduino.h> // For Serial, millis, etc.
-#include <cstring>   // For memcpy, memset, snprintf
+#include "config.h"     // 包含项目配置常量
+#include "ui_manager.h" // << 添加对 UI 管理器的引用
+#include <Arduino.h>    // For Serial, millis, etc.
+#include <cstring>      // For memcpy, memset, snprintf
 
 // TFT_eSPI tft 对象和 drawMainInterface 函数在 Project-ESPNow.ino 中定义
 // 通过 extern 声明来在此文件中使用它们
@@ -30,6 +31,10 @@ size_t currentHistorySendIndex = 0; // 定义新增的全局变量
 long relativeBootTimeOffset = 0;
 unsigned long uptimeOfLastPeerSyncedFrom = 0;
 unsigned long timeRequestSentForAllDrawings = 0; // 新增：记录请求所有绘图数据的时间戳
+
+// 用于接收进度条的变量
+static size_t receivedHistoryPointCount = 0;
+static uint16_t totalPointsExpectedFromPeer = 0;
 
 // 触摸点处理相关 (用于远程点绘制)
 TS_Point lastRemotePoint = {0, 0, 0}; // 远程最后一点
@@ -331,6 +336,8 @@ void processIncomingMessages()
                 // 场景1: 正在进行历史数据同步 (本机是请求方，已收到 SYNC_START)
                 Serial.println("  处理 MSG_TYPE_DRAW_POINT 作为历史同步数据。");
                 allDrawingHistory.push_back(currentPointData); // 存储历史点
+                receivedHistoryPointCount++;
+                updateReceiveProgress(receivedHistoryPointCount, totalPointsExpectedFromPeer);
                 // 绘图逻辑
                 if (currentPointData.timestamp - lastRemoteDrawTime > TOUCH_STROKE_INTERVAL || lastRemotePoint.z == 0)
                 {
@@ -415,10 +422,19 @@ void processIncomingMessages()
                 syncStartMsgBeforeSending.senderUptime = localCurrentRawUptime;
                 syncStartMsgBeforeSending.senderOffset = localCurrentOffset;
                 memset(&syncStartMsgBeforeSending.touch_data, 0, sizeof(TouchData_t));
+                syncStartMsgBeforeSending.totalPointsForSync = allDrawingHistory.size(); // 设置总点数
                 sendSyncMessage(&syncStartMsgBeforeSending);
                 Serial.println("  发送 MSG_TYPE_SYNC_START (准备发送历史数据，将开始分批发送)");
 
                 // 设置状态以开始分批发送，实际发送将在 processIncomingMessages 末尾的逻辑中进行
+                if (!allDrawingHistory.empty())
+                {
+                    updateSendProgress(0, allDrawingHistory.size()); // 初始化发送进度条
+                }
+                else
+                {
+                    hideSendProgress(); // 如果没有历史记录，则隐藏进度条
+                }
                 isSendingDrawingData = true;
                 currentHistorySendIndex = 0;
                 // 原有的 for 循环发送逻辑已移除
@@ -440,7 +456,11 @@ void processIncomingMessages()
             if (isReceivingDrawingData)
             {
                 Serial.println("  同步完成 (本机为较新设备，已接收完数据)。");
-
+                // 确保接收进度条更新到100% (如果需要，但现在隐藏由外部控制)
+                // if (totalPointsExpectedFromPeer > 0) { 
+                //     updateReceiveProgress(receivedHistoryPointCount, totalPointsExpectedFromPeer);
+                // }
+                
                 // 使用 SNTP-like 的时间同步方法：
                 // Offset = (服务器发送时间戳 + 服务器已知偏移) - 客户端接收时间戳
                 // localCurrentRawUptime 是在处理此消息时本机的 millis()
@@ -448,7 +468,8 @@ void processIncomingMessages()
                 Serial.println("  使用 localCurrentRawUptime (SNTP-like) 计算 offset");
 
                 // 记录一下 timeRequestSentForAllDrawings 的状态，但它不再用于主要计算
-                if (timeRequestSentForAllDrawings == 0) {
+                if (timeRequestSentForAllDrawings == 0)
+                {
                     Serial.println("  警告: timeRequestSentForAllDrawings 为 0 (本应在请求时设置).");
                 }
                 // else {
@@ -456,12 +477,14 @@ void processIncomingMessages()
                 //    Serial.print("  近似 RTT: "); Serial.println(rtt_approx);
                 // }
 
-
                 iamRequestingAllData = false;
                 isReceivingDrawingData = false;
                 isAwaitingSyncStartResponse = false;
                 timeRequestSentForAllDrawings = 0;
                 uptimeOfLastPeerSyncedFrom = peerRawUptime;
+
+                hideReceiveProgress(); // 在所有状态更新后，显式隐藏接收进度条
+
                 Serial.print("  relativeBootTimeOffset 计算并设置为: ");
                 Serial.println(relativeBootTimeOffset);
                 Serial.print("  uptimeOfLastPeerSyncedFrom 设置为: ");
@@ -509,7 +532,7 @@ void processIncomingMessages()
                 sendSyncMessage(&requestMsgRetry);
                 timeRequestSentForAllDrawings = millis(); // 更新请求时间戳
                 Serial.println("  重新发送 MSG_TYPE_REQUEST_ALL_DRAWINGS.");
-                
+
                 // 更新对端信息，因为这仍然是来自对端的最新（尽管可能是异常的）消息
                 lastKnownPeerUptime = peerRawUptime;
                 lastKnownPeerOffset = peerReceivedOffset;
@@ -616,11 +639,21 @@ void processIncomingMessages()
 
                 isAwaitingSyncStartResponse = false;
                 isReceivingDrawingData = true;
+                
+                totalPointsExpectedFromPeer = msg.totalPointsForSync;
+                receivedHistoryPointCount = 0;
+                if (totalPointsExpectedFromPeer > 0) {
+                    updateReceiveProgress(receivedHistoryPointCount, totalPointsExpectedFromPeer);
+                } else {
+                    hideReceiveProgress(); // 如果对方没有点要发送，则隐藏进度条
+                }
 
                 lastKnownPeerUptime = peerRawUptime;
                 lastKnownPeerOffset = peerReceivedOffset;
                 Serial.print("  屏幕已清空。准备从对端 (raw uptime: ");
                 Serial.print(peerRawUptime);
+                Serial.print(", total points: ");
+                Serial.print(totalPointsExpectedFromPeer);
                 Serial.println(") 同步数据。");
             }
             else if (isSendingDrawingData)
@@ -685,12 +718,15 @@ void processIncomingMessages()
             sendSyncMessage(&completeMsg);
 
             Serial.println("  所有历史绘图数据已分批发送完毕。发送了 ALL_DRAWINGS_COMPLETE。");
+            updateSendProgress(currentHistorySendIndex, allDrawingHistory.size()); // 最后更新一次确保是100%
+            // hideSendProgress(); // 或者在 updateSendProgress 内部处理完成后的隐藏
             isSendingDrawingData = false;
-            // currentHistorySendIndex = 0; // 可以在下次开始发送时再重置
+            // currentHistorySendIndex = 0;
         }
         else if (pointsSentThisCycle > 0)
         {
             // 当前批次已发送，但还有更多数据
+            updateSendProgress(currentHistorySendIndex, allDrawingHistory.size()); // 更新发送进度
             Serial.print("  分批发送：已发送 ");
             Serial.print(pointsSentThisCycle);
             Serial.print(" 个点，总计已发送 ");

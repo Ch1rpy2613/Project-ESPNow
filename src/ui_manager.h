@@ -3,9 +3,9 @@
 
 #include "config.h"
 #include <TFT_eSPI.h>
-#include <set>    // For std::set
-#include <string> // For String (used in std::set<String> macSet)
-#include <vector> // For std::vector (used in allDrawingHistory)
+#include <set>               // For std::set
+#include <string>            // For String (used in std::set<String> macSet)
+#include <vector>            // For std::vector (used in allDrawingHistory)
 #include "esp_now_handler.h" // For TouchData_t, macSet, allDrawingHistory, relativeBootTimeOffset, replayAllDrawings
 
 // --- Extern Global Variables ---
@@ -15,15 +15,28 @@ extern TFT_eSPI tft; // Defined in Project-ESPNow.ino
 // UI state variables that will be defined in ui_manager.cpp
 extern uint32_t currentColor;      // 当前画笔颜色
 extern bool inCustomColorMode;     // 是否处于自定义颜色模式
-extern int redValue;               // 红色通道值 (0-255)
-extern int greenValue;             // 绿色通道值 (0-255)
-extern int blueValue;              // 蓝色通道值 (0-255)
+extern bool isDebugInfoVisible;    // 调试信息框是否可见
+extern bool showDebugToggleButton; // 是否显示调试信息切换按钮
+
+// 进度条状态变量
+extern int sendProgressTotal;      // 发送总数
+extern int sendProgressCurrent;    // 当前发送进度
+extern int receiveProgressTotal;   // 接收总数
+extern int receiveProgressCurrent; // 当前接收进度
+extern bool showSendProgress;      // 是否显示发送进度条
+extern bool showReceiveProgress;   // 是否显示接收进度条
+extern bool isProjectInfoPopupVisible; // 项目信息弹窗是否可见
+extern bool isCoffeePopupVisible;    // "Coffee" 弹窗是否可见
+
+extern int redValue;                // 红色通道值 (0-255)
+extern int greenValue;              // 绿色通道值 (0-255)
+extern int blueValue;               // 蓝色通道值 (0-255)
 extern uint16_t *savedScreenBuffer; // 用于保存调色界面覆盖区域的屏幕缓冲
 
 // Variables from other modules needed by UI functions
-extern std::set<String> macSet; // 来自 esp_now_handler.h (用于设备计数)
+extern std::set<String> macSet;                    // 来自 esp_now_handler.h (用于设备计数)
 extern std::vector<TouchData_t> allDrawingHistory; // 来自 esp_now_handler.h (用于调试信息)
-extern long relativeBootTimeOffset; // 来自 esp_now_handler.h (用于调试信息)
+extern long relativeBootTimeOffset;                // 来自 esp_now_handler.h (用于调试信息)
 // isScreenOn (如果 drawDebugInfo 需要) 会通过包含 power_manager.h 在 ui_manager.cpp 中获得
 
 // --- 函数声明 ---
@@ -35,36 +48,59 @@ void uiManagerInit(); // UI 相关初始化占位符 (TFT 初始化之外)
 void drawMainInterface();
 void drawResetButton();
 void drawColorButtons();
-void drawSleepButton(); // 显示来自 macSet 的设备数量
+void drawSleepButton();       // 显示来自 macSet 的设备数量
 void drawCustomColorButton(); // 显示当前颜色
-void drawStarButton(); // 显示当前颜色, 自定义颜色入口的占位符
+void drawStarButton();        // 显示当前颜色, 自定义颜色入口的占位符
 
 // 调试信息函数
-void drawDebugInfo(); // 显示历史记录大小、运行时间、偏移量、内存
+void drawDebugInfo();         // 显示历史记录大小、运行时间、偏移量、内存
+void toggleDebugInfo();       // 切换调试信息框的显示状态
+void drawDebugToggleButton(); // 绘制调试信息切换按钮
+void drawInfoButton();        // 绘制项目信息按钮
+void showProjectInfoPopup();  // 显示项目信息弹窗
+void hideProjectInfoPopup();  // 隐藏项目信息弹窗
+
+// "Coffee" 按钮相关函数
+void drawCoffeeButton();      // 绘制 "Coffee" 按钮
+void showCoffeePopup();       // 显示 "Coffee" 弹窗
+void hideCoffeePopup();       // 隐藏 "Coffee" 弹窗
 
 // 按钮按下检测函数 (基于坐标)
 bool isResetButtonPressed(int x, int y);
 bool isColorButtonPressed(int x, int y, uint32_t &selectedColor); // 输出选中的颜色
 bool isSleepButtonPressed(int x, int y);
 bool isCustomColorButtonPressed(int x, int y); // 用于进入自定义颜色模式
-bool isBackButtonPressed(int x, int y);    // 用于退出自定义颜色模式
+bool isBackButtonPressed(int x, int y);        // 用于退出自定义颜色模式
+bool isDebugToggleButtonPressed(int x, int y); // 检测调试信息切换按钮是否被按下
+bool isInfoButtonPressed(int x, int y);    // 检测项目信息按钮是否被按下
+bool isCoffeeButtonPressed(int x, int y);  // 检测 "Coffee" 按钮是否被按下
 
 // 自定义颜色选择器 UI 函数
 void handleCustomColorTouch(int x, int y); // 处理颜色选择器内的触摸
 void updateSingleColorSlider(int yPos, uint32_t sliderColor, int &channelValue);
-void drawColorSelectors();    // 绘制 RGB 滑块和返回按钮
+void drawColorSelectors();       // 绘制 RGB 滑块和返回按钮
 void updateCustomColorPreview(); // 更新颜色预览框
 void refreshAllColorSliders();   // 重绘所有滑块 (例如触摸后)
 void closeColorSelectors();      // 恢复屏幕，退出自定义颜色模式
 
 // 屏幕缓冲区管理 (用于自定义颜色选择器)
-void saveScreenArea();    // 保存颜色选择器将覆盖的屏幕区域
+void saveScreenArea();         // 保存颜色选择器将覆盖的屏幕区域
 void restoreSavedScreenArea(); // 恢复保存的屏幕区域
 
 // UI 工具函数
 void updateCurrentColor(uint32_t newColor); // 设置全局当前颜色
-void updateConnectedDevicesCount(); // 更新休眠按钮上的设备计数
-void clearScreenAndCache(); // 清屏、重绘UI、重置相关触摸点 (影响广泛)
+void updateConnectedDevicesCount();         // 更新休眠按钮上的设备计数
+void clearScreenAndCache();                 // 清屏、重绘UI、重置相关触摸点 (影响广泛)
+void redrawMainScreen();                    // 重绘整个主屏幕
+
+// 进度条绘制和更新函数
+void drawSendProgressIndicator();
+void drawReceiveProgressIndicator();
+void updateSendProgress(int current, int total);
+void updateReceiveProgress(int current, int total);
+void hideSendProgress();
+void hideReceiveProgress();
+
 void hideStarButton();
 void showStarButton();
 void redrawStarButton();

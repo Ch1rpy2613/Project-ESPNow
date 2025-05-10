@@ -59,8 +59,8 @@ def text_to_char_qr(text_data, output_path):
 
 if __name__ == "__main__":
     images_to_process = {
-        "image-ejzs.png": "image-ejzs_decoded.txt",
-        "image-yysw.png": "image-yysw_decoded.txt"
+        "shapaper blog.png": "shapaper_blog.txt",
+        "原作者空间.png": "原作者空间.txt",
     }
 
     # Check for dependencies

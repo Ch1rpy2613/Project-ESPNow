@@ -716,6 +716,66 @@ void showCoffeePopup() {
         currentY_wechat += qrPixelSize;
         if (currentY_wechat > popupY + popupH - 5 - qrPixelSize) break;
     }
+
+    // --- 新增 Shapaper's Blog 二维码 ---
+    textY = currentY_alipay > currentY_wechat ? currentY_alipay : currentY_wechat; // 取两个二维码中较低的Y值作为基准
+    textY += lineHeight * 0.5; // 在二维码下方留出一些间距
+
+    tft.setTextDatum(TC_DATUM);
+    tft.drawString("Shapaper's Blog(https://blog.dimeta.top/)", popupX + popupW / 2, textY, 1); // 博客标题
+    textY += lineHeight;                                                                  // 在二维码下方留出一些间距
+    tft.setTextDatum(TL_DATUM);
+    tft.drawString("Have many interesting things,Scan to visit", popupX + 5, textY, 1); // 博客二维码标签
+    textY += lineHeight; // 为二维码留出空间
+
+    const char *qr_data_blog =
+        "EEEEEEE..E....E.E.EEEEEEE\n"
+        "E.....E.EE.EE.EEE.E.....E\n"
+        "E.EEE.E..EEE...EE.E.EEE.E\n"
+        "E.EEE.E.EE.E.EEE..E.EEE.E\n"
+        "E.EEE.E...E.E...E.E.EEE.E\n"
+        "E.....E.E.E....EE.E.....E\n"
+        "EEEEEEE.E.E.E.E.E.EEEEEEE\n"
+        "............E.EEE........\n"
+        "EEEEE.EEEEE.EE...E.E.E.E.\n"
+        "EE.EEE.E.E...E..E..E...E.\n"
+        "EE....E..E.EEEEEEE..EE.EE\n"
+        "....E..EEEEE...E..E.....E\n"
+        "..E..EE..E.E.EE..EE.E.EEE\n"
+        "E.EE.E....E.E.E.E..E.E.E.\n"
+        "E.EE.EEE......EE.E.EEE.EE\n"
+        "E..EEE..E...E..EEE.EE...E\n"
+        "E...E.E.EE..EEEEEEEEE.E..\n"
+        "........EE...E.EE...EE...\n"
+        "EEEEEEE.E.EEEEE.E.E.E.EEE\n"
+        "E.....E....E..E.E...EE..E\n"
+        "E.EEE.E.E.EEEEEEEEEEE.E..\n"
+        "E.EEE.E.EEE.E.EEEEE.EEEEE\n"
+        "E.EEE.E.EEE.....E....EE.E\n"
+        "E.....E.E.EE...EEEEEEE..E\n"
+        "EEEEEEE.E..EEE.E.E.EEEEEE";
+
+    int qrBlogOffsetX = popupX + (popupW - qrWidthInPixels) / 2; // 单个二维码居中
+    int currentY_blog = textY;
+    const char *p_blog = qr_data_blog;
+
+    for (int row = 0; row < 25 && *p_blog; ++row) { // 假设博客二维码也是25行 (根据txt内容调整)
+        int i = 0;
+        while (*p_blog && *p_blog != '\n' && i < 30) { // 假设最大宽度30
+            lineBuffer[i++] = *p_blog++;
+        }
+        lineBuffer[i] = '\0';
+        if (*p_blog == '\n') p_blog++;
+
+        for (int j = 0; j < i; ++j) {
+            if (lineBuffer[j] == 'E') {
+                tft.fillRect(qrBlogOffsetX + j * qrPixelSize, currentY_blog, qrPixelSize, qrPixelSize, qrPixelColor);
+            }
+        }
+        currentY_blog += qrPixelSize;
+        if (currentY_blog > popupY + popupH - 5 - qrPixelSize - lineHeight) break; // 避免覆盖关闭提示
+    }
+    // --- 结束新增 Shapaper's Blog 二维码 ---
     
     tft.setTextDatum(BC_DATUM);
     tft.drawString("(Tap to close)", popupX + popupW / 2, popupY + popupH - 5, 1);
@@ -753,14 +813,15 @@ void showProjectInfoPopup() {
 
     isProjectInfoPopupVisible = true;
 
-    // 弹窗区域和颜色
-    int popupX = 20;
-    int popupY = 30;
+    // 弹窗区域和颜色 - 增大弹窗
+    int popupX = 10; // 减小边距，使弹窗更大
+    int popupY = 10; // 减小边距
     int popupW = SCREEN_WIDTH - 2 * popupX;
-    int popupH = SCREEN_HEIGHT - 2 * popupY - 10; // 留出底部空间
+    int popupH = SCREEN_HEIGHT - 2 * popupY; // 占据更多高度
     uint16_t popupBgColor = tft.color565(40, 40, 80); // 深蓝紫色
     uint16_t popupBorderColor = TFT_LIGHTGREY;
     uint16_t textColor = TFT_WHITE;
+    uint16_t qrPixelColor = TFT_WHITE; // 二维码像素颜色
 
     tft.fillRect(popupX, popupY, popupW, popupH, popupBgColor);
     tft.drawRect(popupX, popupY, popupW, popupH, popupBorderColor);
@@ -773,7 +834,7 @@ void showProjectInfoPopup() {
     tft.setTextDatum(TL_DATUM); // 左上角对齐
     int textX = popupX + 5;
     int textY = popupY + 25;
-    int lineHeight = 12;
+    int lineHeight = 10; // 减小行高以容纳更多内容
 
     tft.setCursor(textX, textY);
     tft.print("Github: github.com/");
@@ -796,8 +857,78 @@ void showProjectInfoPopup() {
     textY += lineHeight;
     tft.setCursor(textX + 10, textY);
     tft.print("  (shapaper@126.com)");
-    
+
     textY += lineHeight * 1.5;
+    tft.setCursor(textX, textY);
+    tft.print("Kur1oR3iko's Bilibili Space:"); // 新增内容
+    textY += lineHeight;
+
+    // 二维码数据 (原作者空间)
+    const char *qr_data_author =
+        "EEEEEEE.E..EE.EEE.E.E.EEEEEEE\n"
+        "E.....E..EE.....EE.E..E.....E\n"
+        "E.EEE.E...E.E..EE.EE..E.EEE.E\n"
+        "E.EEE.E.....E..E.E.EE.E.EEE.E\n"
+        "E.EEE.E..E.E..E..EEE..E.EEE.E\n"
+        "E.....E...E.E...E.E...E.....E\n"
+        "EEEEEEE.E.E.E.E.E.E.E.EEEEEEE\n"
+        "........E.EE.E.EE..E.........\n"
+        "EE.EE.E..EEE.E.E.E....E.....E\n"
+        "EEEE...E.E..EE.EEEEE...EE.EE.\n"
+        "...EEEE...EE.E.E..........E..\n"
+        ".EE....EEEEEEE..EE...EEEEE..E\n"
+        "E..E..EE.E.EEE......EEEE....E\n"
+        "EEE.E........EEE.EE...EEEEEEE\n"
+        ".EE.E.EEEEEEEE.EE..E...EE.E.E\n"
+        "EEEEEE.EE.EE....E..EE...E.E.E\n"
+        "E.E.EEE.E.E...E.E.E.E..E.E...\n"
+        "E.E..E.EEEEEEEEEE.EEE...E.EE.\n"
+        "EE.E.EE...EE...E...E.EEEEE..E\n"
+        "EEE..E..EE..E.E....EE.E.EEE..\n"
+        "EEE.EEEEE.E.EEEE.EE.EEEEEEEE.\n"
+        "........EE....EEE...E...EE...\n"
+        "EEEEEEE...E.E.EEE.EEE.E.EE...\n"
+        "E.....E..E....E.EE.EE...E...E\n"
+        "E.EEE.E.EEE..EE...EEEEEEEE..E\n"
+        "E.EEE.E.EE..E..E...EEE.E....E\n"
+        "E.EEE.E..EE...EE....EE.EE.EEE\n"
+        "E.....E.EEE.EEE.E.E....E.EE.E\n"
+        "EEEEEEE.E..EE..EE.EEE..EEE...";
+
+    int qrPixelSize = 2; // 每个二维码“像素”的大小
+    int qrWidthInChars = 29; // 二维码的字符宽度
+    int qrHeightInChars = 29; // 二维码的字符高度
+    int qrDisplayWidth = qrWidthInChars * qrPixelSize;
+    // int qrDisplayHeight = qrHeightInChars * qrPixelSize; // 未使用
+
+    // 将二维码绘制在文本下方，居中显示
+    int qrOffsetX = popupX + (popupW - qrDisplayWidth) / 2;
+    int qrOffsetY = textY + lineHeight / 2; // 在文本下方留出一些空间
+
+    char lineBuffer[35];
+    const char *p_author = qr_data_author;
+    int currentY_qr = qrOffsetY;
+
+    for (int row = 0; row < qrHeightInChars && *p_author; ++row) {
+        int i = 0;
+        while (*p_author && *p_author != '\n' && i < qrWidthInChars) {
+            lineBuffer[i++] = *p_author++;
+        }
+        lineBuffer[i] = '\0';
+        if (*p_author == '\n') p_author++;
+
+        for (int col = 0; col < i; ++col) {
+            if (lineBuffer[col] == 'E') {
+                tft.fillRect(qrOffsetX + col * qrPixelSize, currentY_qr, qrPixelSize, qrPixelSize, qrPixelColor);
+            }
+        }
+        currentY_qr += qrPixelSize;
+        if (currentY_qr > popupY + popupH - 5 - qrPixelSize - lineHeight) break; // 避免覆盖关闭提示
+    }
+    
+    textY = currentY_qr + lineHeight / 2; // 更新textY到二维码下方
+
+    // Shapaper的贡献信息移到二维码下方
     tft.setCursor(textX, textY);
     tft.print("Shapaper did a lot of");
     textY += lineHeight;

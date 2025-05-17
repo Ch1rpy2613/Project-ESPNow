@@ -305,17 +305,42 @@ void refreshAllColorSliders()
     float barHeightGreen = greenValue * COLOR_SLIDER_HEIGHT / 255.0;
     float barHeightBlue = blueValue * COLOR_SLIDER_HEIGHT / 255.0;
 
+    // 清除旧的数值显示区域
+    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, 0, 40, 3 * COLOR_SLIDER_HEIGHT, TFT_BLACK);
+
+    // 绘制红色滑块
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_RED);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT - barHeightRed, COLOR_SLIDER_WIDTH, barHeightRed, TFT_RED);
+    // 显示红色数值
+    char redBuffer[10];
+    sprintf(redBuffer, "%d(#%02X)", redValue, redValue); // 十进制(十六进制)
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, 2); // 调整位置以容纳更长的文本
+    tft.print(redBuffer);
 
+    // 绘制绿色滑块
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_GREEN);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT - barHeightGreen, COLOR_SLIDER_WIDTH, barHeightGreen, TFT_GREEN);
+    // 显示绿色数值
+    char greenBuffer[10];
+    sprintf(greenBuffer, "%d(#%02X)", greenValue, greenValue); // 十进制(十六进制)
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, COLOR_SLIDER_HEIGHT + 2); // 调整位置
+    tft.print(greenBuffer);
 
+    // 绘制蓝色滑块
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLUE);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 3 * COLOR_SLIDER_HEIGHT - barHeightBlue, COLOR_SLIDER_WIDTH, barHeightBlue, TFT_BLUE);
+    // 显示蓝色数值
+    char blueBuffer[10];
+    sprintf(blueBuffer, "%d(#%02X)", blueValue, blueValue); // 十进制(十六进制)
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, 2 * COLOR_SLIDER_HEIGHT + 2); // 调整位置
+    tft.print(blueBuffer);
 
     updateCustomColorPreview();
 }

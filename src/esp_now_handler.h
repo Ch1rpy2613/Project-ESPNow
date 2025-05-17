@@ -6,6 +6,7 @@
 #include <esp_wifi.h> // 用于 esp_wifi_get_mac()
 #include <queue>
 #include <set>
+#include <map>        // 新增：用于 std::map
 #include <string>     // For std::string if used by macSet, though it's std::set<String>
 #include "config.h"   // 项目配置文件
 #include <TFT_eSPI.h> // 需要 TFT_eSPI::color565 等，以及 tft 对象
@@ -23,7 +24,8 @@ enum MessageType_e // 使用 _e 后缀表示 enum
     MSG_TYPE_ALL_DRAWINGS_COMPLETE,
     MSG_TYPE_CLEAR_AND_REQUEST_UPDATE,
     MSG_TYPE_RESET_CANVAS,
-    MSG_TYPE_SYNC_START // 新增：同步开始信号
+    MSG_TYPE_SYNC_START, // 新增：同步开始信号
+    MSG_TYPE_HEARTBEAT   // 新增：心跳包
 };
 typedef enum MessageType_e MessageType_t; // Typedef for the enum
 
@@ -43,6 +45,7 @@ extern uint8_t broadcastAddress[];
 extern std::queue<SyncMessage_t> incomingMessageQueue;
 extern DrawingHistory allDrawingHistory;
 extern std::set<String> macSet; // 用于设备计数，由 ESP-NOW 填充
+extern std::map<String, unsigned long> peerLastHeartbeat; // 新增：存储每个对端的最后心跳时间
 
 extern unsigned long lastKnownPeerUptime;
 extern long lastKnownPeerOffset;
@@ -70,6 +73,8 @@ void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, 
 void sendSyncMessage(const SyncMessage_t *msg); // 发送同步消息的辅助函数
 void processIncomingMessages(); // 处理接收到的消息队列
 void replayAllDrawings();       // 重播所有绘图历史 (需要 tft 对象)
+void sendHeartbeat(); // 新增：发送心跳包
+void checkPeerHeartbeatTimeout(); // 新增：检查对端心跳超时
 
 // 注意: replayAllDrawings 函数依赖于在 esp_now_handler.cpp 中可访问的全局 tft 对象和 drawMainInterface 函数。
 

@@ -64,6 +64,7 @@ unsigned long deviceInitialBootMillis = 0; // 本机启动时的 millis() 值 (�
 unsigned long lastBroadcastTime = 0;         // 上次广播 MAC 地址发现消息的时间戳 (用于UI更新设备数)
 unsigned long lastUptimeInfoBroadcastTime = 0; // 上次广播 Uptime 信息的时间戳 (ESP-NOW模块也用)
 unsigned long lastDebugInfoUpdateTime = 0;   // 上次更新调试信息区域的时间戳 (UI模块用)
+unsigned long lastHeartbeatSendTime = 0;     // 新增：上次发送心跳包的时间戳
 
 
 // 屏幕状态变量 (isScreenOn) 已移至 power_manager.cpp (作为 extern)
@@ -136,21 +137,30 @@ void loop()
         lastUptimeInfoBroadcastTime = currentTimeForLoop;
     }
 
-    // 2. 更新调试信息 (如果屏幕亮且不在调色模式)
+    // 2. 发送心跳包
+    if (currentTimeForLoop - lastHeartbeatSendTime >= HEARTBEAT_SEND_INTERVAL_MS) {
+        sendHeartbeat(); // 来自 esp_now_handler.cpp
+        lastHeartbeatSendTime = currentTimeForLoop;
+    }
+
+    // 3. 检查对端心跳超时
+    checkPeerHeartbeatTimeout(); // 来自 esp_now_handler.cpp
+
+    // 4. 更新调试信息 (如果屏幕亮且不在调色模式)
     // isScreenOn 和 inCustomColorMode 分别是来自 power_manager 和 ui_manager 的 extern 变量
     if (isScreenOn && !inCustomColorMode && (currentTimeForLoop - lastDebugInfoUpdateTime >= DEBUG_INFO_UPDATE_INTERVAL)) {
         drawDebugInfo(); // 来自 ui_manager.cpp
         lastDebugInfoUpdateTime = currentTimeForLoop;
     }
     
-    // 3. 更新连接设备计数 (如果不在调色模式)
+    // 5. 更新连接设备计数 (如果不在调色模式)
     // inCustomColorMode 是来自 ui_manager 的 extern 变量
     if (!inCustomColorMode && (currentTimeForLoop - lastBroadcastTime >= BROADCAST_INTERVAL)) { // BROADCAST_INTERVAL 也用于设备数量的UI更新
         updateConnectedDevicesCount(); // 来自 ui_manager.cpp
         lastBroadcastTime = currentTimeForLoop; 
     }
 
-    // 4. 管理屏幕关闭时的 LED 状态 (包括呼吸灯)
+    // 6. 管理屏幕关闭时的 LED 状态 (包括呼吸灯)
     // isScreenOn 和 hasNewUpdateWhileScreenOff 是来自 power_manager 的 extern 变量
     if (!isScreenOn && hasNewUpdateWhileScreenOff) {
         updateBreathLED(); // 来自 power_manager.cpp

@@ -20,6 +20,7 @@ uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ESP-NOW �
 std::queue<SyncMessage_t> incomingMessageQueue;                    // ESP-NOW 接收消息队列
 DrawingHistory allDrawingHistory;                        // 所有绘图操作的历史记录
 std::set<String> macSet;                                           // 已发现的对端设备 MAC 地址
+std::map<String, unsigned long> peerLastHeartbeat; // 定义新增的全局变量：存储每个对端的最后心跳时间
 
 unsigned long lastKnownPeerUptime = 0;
 long lastKnownPeerOffset = 0;
@@ -106,6 +107,7 @@ void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPt
                  info->src_addr[0], info->src_addr[1], info->src_addr[2],
                  info->src_addr[3], info->src_addr[4], info->src_addr[5]);
         macSet.insert(String(macStr)); // 添加到 MAC 地址集合中用于计数
+        peerLastHeartbeat[String(macStr)] = millis(); // 更新对端的最后心跳时间
 
         incomingMessageQueue.push(receivedMsg); // 将消息放入队列等待处理
     }
@@ -116,6 +118,7 @@ void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPt
         memcpy(macStr, incomingDataPtr, len);
         macStr[len] = '\0';
         macSet.insert(String(macStr));
+        peerLastHeartbeat[String(macStr)] = millis(); // 更新对端的最后心跳时间
     }
     else
     {
@@ -675,6 +678,17 @@ void processIncomingMessages()
             }
             break;
         }
+        case MSG_TYPE_HEARTBEAT:
+        {
+            // 收到心跳包，OnSyncDataRecv 中已经更新了 peerLastHeartbeat，这里可以根据需要添加调试信息
+            // Serial.print("收到心跳包，来自对端 MAC (最后通信): "); // 调试信息，如果频繁可能会刷屏
+            // char macStr[18];
+            // snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+            //          lastPeerMac[0], lastPeerMac[1], lastPeerMac[2],
+            //          lastPeerMac[3], lastPeerMac[4], lastPeerMac[5]);
+            // Serial.println(macStr);
+            break;
+        }
         default:
         {
             Serial.print("收到未知消息类型: ");
@@ -745,6 +759,51 @@ void processIncomingMessages()
         }
     }
 } // End of processIncomingMessages()
+
+// 新增：发送心跳包
+void sendHeartbeat()
+{
+    SyncMessage_t heartbeatMsg;
+    heartbeatMsg.type = MSG_TYPE_HEARTBEAT;
+    heartbeatMsg.senderUptime = millis();
+    heartbeatMsg.senderOffset = relativeBootTimeOffset;
+    memset(&heartbeatMsg.touch_data, 0, sizeof(TouchData_t));
+    heartbeatMsg.totalPointsForSync = 0; // 心跳包不需要这个字段
+
+    sendSyncMessage(&heartbeatMsg);
+    // Serial.println("发送心跳包."); // 调试信息，如果频繁发送可能会刷屏
+}
+
+// 新增：检查对端心跳超时
+void checkPeerHeartbeatTimeout()
+{
+    unsigned long currentTime = millis();
+    // 使用一个临时的 vector 来存储需要移除的 MAC 地址，避免在迭代时修改 map
+    std::vector<String> macsToRemove;
+
+    for (auto const& [mac, lastHeartbeatTime] : peerLastHeartbeat)
+    {
+        if (currentTime - lastHeartbeatTime > HEARTBEAT_TIMEOUT_MS) // HEARTBEAT_TIMEOUT_MS 定义在 config.h
+        {
+            Serial.print("对端 ");
+            Serial.print(mac);
+            Serial.println(" 心跳超时，认为已下线。");
+            macsToRemove.push_back(mac);
+            // TODO: 在 UI 或其他地方显示对端下线的信息
+            // 例如：updatePeerStatus(mac, false);
+        }
+    }
+
+    // 移除超时的对端
+    for (const auto& mac : macsToRemove)
+    {
+        peerLastHeartbeat.erase(mac);
+        macSet.erase(mac); // 同时从 macSet 中移除
+        // TODO: 如果需要，更新 UI 显示的对端数量
+        // 例如：updatePeerCountDisplay(macSet.size());
+    }
+}
+
 
 // 重播所有绘图历史 (在屏幕上重新绘制所有点和线)
 void replayAllDrawings()

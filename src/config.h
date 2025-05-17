@@ -93,6 +93,10 @@
 #define MIN_UPTIME_DIFF_FOR_NEW_SYNC_TARGET 200UL // 选择新的同步目标时，对端设备最小原始运行时间差异 (毫秒) - 用于迟滞判断
 #define EFFECTIVE_UPTIME_SYNC_THRESHOLD 1000UL    // 有效运行时间同步阈值 (毫秒) - 在此阈值内的差异不触发新的同步以避免抖动
 
+// 心跳包相关常量
+#define HEARTBEAT_SEND_INTERVAL_MS 5000UL // 心跳包发送间隔 (毫秒)
+#define HEARTBEAT_TIMEOUT_MS 10000UL      // 心跳超时时间 (毫秒)，10秒
+
 // 调试信息切换按钮位置和大小
 #define DEBUG_TOGGLE_BUTTON_X 2                     // 按钮 X 坐标 (左下角)
 #define DEBUG_TOGGLE_BUTTON_W 20                    // 按钮宽度

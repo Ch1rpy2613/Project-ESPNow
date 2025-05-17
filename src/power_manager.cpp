@@ -66,7 +66,7 @@ float readBatteryVoltagePercentage() {
     // 将电压映射到百分比 (根据您的特定电池调整这些值)
     // 典型锂聚合物电池: 3.0V (空) 到 4.2V (满)
     // 原始代码使用: 2.25V 到 3.9V
-    float percentage = (voltage - 2.25) / (3.9 - 2.25) * 100.0;
+    float percentage = (voltage - 2.25) / (3.7 - 2.25) * 100.0;
     return constrain(percentage, 0, 100);
 }
 

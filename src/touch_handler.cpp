@@ -5,6 +5,7 @@
 // 包含依赖模块的头文件
 #include "ui_manager.h"       // 用于UI函数和状态 (inCustomColorMode, currentColor 等)
 #include "esp_now_handler.h"  // 用于ESP-NOW函数 (sendSyncMessage) 和数据 (allDrawingHistory 等)
+#include "drawing_history.h" // 包含自定义绘图历史头文件
 
 // --- 静态 (文件局部) 全局变量，用于触摸处理状态 ---
 static TS_Point lastLocalPoint = {0, 0, 0};  // 本地最后一次触摸点坐标
@@ -87,7 +88,7 @@ void handleLocalTouch() {
     // ... (其他UI相关函数)
 
     // 来自 esp_now_handler.h 的依赖项:
-    // extern std::vector<TouchData_t> allDrawingHistory;
+    extern DrawingHistory allDrawingHistory;
     // extern long relativeBootTimeOffset;
     // ... (其他ESP-NOW相关函数和变量)
 
@@ -108,8 +109,8 @@ void handleLocalTouch() {
                 return; // 操作已处理
             }
         } else if (isProjectInfoPopupVisible) { // 然后处理项目信息弹窗的关闭逻辑
-            xy1 = averageXY(); 
-            if (!xy1.fly) { 
+            xy1 = averageXY();
+            if (!xy1.fly) {
                  hideProjectInfoPopup(); // 关闭弹窗
                  lastLocalPoint.z = 0; // 标记为无触摸，避免后续处理
                  return; // 操作已处理
@@ -142,7 +143,7 @@ void handleLocalTouch() {
 
                 // 首先检查调试相关按钮的点击
                 // 注意：Coffee 按钮的检查已在其之前
-                if (isDebugInfoVisible) { 
+                if (isDebugInfoVisible) {
                     // 点击调试信息框本身来切换 (InfoButton 和 CoffeeButton 已被优先处理)
                     if (mapX >= 2 && mapX <= 122 && mapY >= (SCREEN_HEIGHT - 42) && mapY <= SCREEN_HEIGHT) {
                         if (!isInfoButtonPressed(mapX, mapY)) { // 确保不是误点InfoButton区域
@@ -173,16 +174,16 @@ void handleLocalTouch() {
                     }
 
                     // 清除本地绘图历史 (allDrawingHistory 是来自 esp_now_handler 的 extern 变量)
-                    allDrawingHistory.clear(); 
+                    allDrawingHistory.clear();
                     clearScreenAndCache();     // 调用UI管理器的清屏函数
 
                     // 重置ESP-NOW同步状态变量 (来自 esp_now_handler 的 extern 变量)
                     // 这部分逻辑可能更适合放在 esp_now_handler 内部，
                     // 由 "local_reset" 事件/标志触发。
-                    relativeBootTimeOffset = 0; 
+                    relativeBootTimeOffset = 0;
                     iamEffectivelyMoreUptimeDevice = false; // 这些现在位于 esp_now_handler 中
                     iamRequestingAllData = false;
-                    initialSyncLogicProcessed = false; 
+                    initialSyncLogicProcessed = false;
 
                     // 通过ESP-NOW发送复位消息
                     SyncMessage_t resetMsg;
@@ -195,7 +196,7 @@ void handleLocalTouch() {
                     resetMsg.touch_data.y = 0; // 与复位无关
                     resetMsg.touch_data.color = currentColor; // currentColor 来自 ui_manager
                     sendSyncMessage(&resetMsg); // sendSyncMessage 来自 esp_now_handler
-                    
+
                     // 本地绘图历史 (allDrawingHistory) 已被清除。
                     // 屏幕和UI缓存 (clearScreenAndCache()) 已被清除。
                     // 复位消息已发送通知对端设备进行清除。
@@ -244,7 +245,7 @@ void handleLocalTouch() {
                 currentDrawPoint.timestamp = currentRawUptime;
                 currentDrawPoint.isReset = false;
                 currentDrawPoint.color = currentColor; // currentColor 来自 ui_manager
-                
+
                 allDrawingHistory.push_back(currentDrawPoint); // 添加到本地历史 (esp_now_handler 的 extern 变量)
 
                 // 准备并通过ESP-NOW发送绘图数据

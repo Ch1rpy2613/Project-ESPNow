@@ -4,25 +4,16 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h> // 用于 esp_wifi_get_mac()
-#include <vector>
 #include <queue>
 #include <set>
 #include <string>     // For std::string if used by macSet, though it's std::set<String>
 #include "config.h"   // 项目配置文件
 #include <TFT_eSPI.h> // 需要 TFT_eSPI::color565 等，以及 tft 对象
 #include "touch_handler.h" // For TS_Point type
+#include "drawing_history.h" // 包含自定义绘图历史头文件和 TouchData_t 的定义
 
 // ESP-NOW 相关数据结构定义
-// 这些结构体定义已从主 .ino 文件移至此处，这里是其权威定义位置。
-
-typedef struct TouchData_s // 使用 _s 后缀表示 struct，_t 用于 typedef 后的类型名
-{
-    int x;                   // 映射到屏幕的X坐标 (用于绘图)
-    int y;                   // 映射到屏幕的Y坐标 (用于绘图)
-    unsigned long timestamp; // 绘图动作的时间戳 (本地绘制时的 millis())
-    bool isReset;            // 如果此操作是清屏重置，则为 true
-    uint32_t color;          // 绘图颜色
-} TouchData_t;
+// TouchData_t 的定义已移至 drawing_history.h
 
 enum MessageType_e // 使用 _e 后缀表示 enum
 {
@@ -50,7 +41,7 @@ typedef struct SyncMessage_s
 extern esp_now_peer_info_t broadcastPeerInfo;
 extern uint8_t broadcastAddress[];
 extern std::queue<SyncMessage_t> incomingMessageQueue;
-extern std::vector<TouchData_t> allDrawingHistory;
+extern DrawingHistory allDrawingHistory;
 extern std::set<String> macSet; // 用于设备计数，由 ESP-NOW 填充
 
 extern unsigned long lastKnownPeerUptime;
@@ -59,9 +50,9 @@ extern uint8_t lastPeerMac[6];
 extern bool initialSyncLogicProcessed;
 extern bool iamEffectivelyMoreUptimeDevice;
 extern bool iamRequestingAllData;
-extern bool isAwaitingSyncStartResponse; 
-extern bool isReceivingDrawingData;    
-extern bool isSendingDrawingData;        
+extern bool isAwaitingSyncStartResponse;
+extern bool isReceivingDrawingData;
+extern bool isSendingDrawingData;
 extern size_t currentHistorySendIndex;   // 新增：用于分批发送历史记录的当前索引
 extern long relativeBootTimeOffset;
 extern unsigned long uptimeOfLastPeerSyncedFrom;

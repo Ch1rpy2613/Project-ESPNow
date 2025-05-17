@@ -2,6 +2,10 @@
 #include "config.h"
 #include <Arduino.h> // For Serial, millis, ESP, sprintf, etc.
 #include <cstring>   // For memset if used (though not directly apparent here) // 如果使用 memset (此处不明显直接使用)
+#include <TFT_eSPI.h> // 包含 TFT_eSPI 库
+#include <cmath>      // 包含 cmath 库，用于 round 函数
+#include <algorithm>  // 包含 algorithm 库，用于 min/max 函数
+#include "drawing_history.h" // 包含自定义绘图历史头文件
 
 // --- 全局 UI 状态变量 (在此定义) ---
 uint32_t currentColor = TFT_BLUE; // Default to blue, consistent with .ino // 默认为蓝色, 与 .ino 文件一致
@@ -132,7 +136,7 @@ void drawStarButton()
 void drawDebugInfo()
 {
     if (!isScreenOn || inCustomColorMode || !isDebugInfoVisible)
-        return; 
+        return;
 
     int startX = 2;
     int startY = SCREEN_HEIGHT - 42;
@@ -145,7 +149,7 @@ void drawDebugInfo()
     if (!isProjectInfoPopupVisible) {
         tft.fillRect(startX, startY, 120, rectHeight, bgColor);
     }
-    
+
     tft.setTextColor(textColor, bgColor); // 背景色用于文本背景，使其在弹窗上也可见
     tft.setTextSize(1);
     tft.setTextFont(1); // 默认字体
@@ -219,7 +223,7 @@ bool isDebugToggleButtonPressed(int x, int y)
 void drawDebugToggleButton()
 {
     if (!showDebugToggleButton || inCustomColorMode)
-        return; 
+        return;
 
     tft.fillRect(DEBUG_TOGGLE_BUTTON_X, DEBUG_TOGGLE_BUTTON_Y, DEBUG_TOGGLE_BUTTON_W, DEBUG_TOGGLE_BUTTON_H, TFT_DARKCYAN);
     tft.setTextColor(TFT_WHITE, TFT_DARKCYAN);
@@ -231,11 +235,11 @@ void drawDebugToggleButton()
 void toggleDebugInfo()
 {
     isDebugInfoVisible = !isDebugInfoVisible;
-    showDebugToggleButton = !isDebugInfoVisible; 
+    showDebugToggleButton = !isDebugInfoVisible;
     if (isProjectInfoPopupVisible && !isDebugInfoVisible) { // 如果关闭调试信息时弹窗是开的，也关掉弹窗
         hideProjectInfoPopup(); // 这会触发 redrawMainScreen
     } else {
-        redrawMainScreen();      
+        redrawMainScreen();
     }
 }
 
@@ -256,7 +260,7 @@ void handleCustomColorTouch(int x, int y)
             updateSingleColorSlider(y - (2 * COLOR_SLIDER_HEIGHT), TFT_BLUE, blueValue);
         }
         else if (isBackButtonPressed(x, y))
-        { 
+        {
             closeColorSelectors();
             return;
         }
@@ -268,7 +272,7 @@ void handleCustomColorTouch(int x, int y)
 
 void updateSingleColorSlider(int yPos, uint32_t sliderColor, int &channelValue)
 {
-    channelValue = constrain(map(yPos, 0, COLOR_SLIDER_HEIGHT - 1, 255, 0), 0, 255); 
+    channelValue = constrain(map(yPos, 0, COLOR_SLIDER_HEIGHT - 1, 255, 0), 0, 255);
     // 绘制由 refreshAllColorSliders 处理
 }
 
@@ -279,17 +283,17 @@ void drawColorSelectors()
     tft.fillRect(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_W, BACK_BUTTON_H, TFT_DARKGREY);
     tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString("B", BACK_BUTTON_X + BACK_BUTTON_W / 2, BACK_BUTTON_Y + BACK_BUTTON_H / 2, 2); 
+    tft.drawString("B", BACK_BUTTON_X + BACK_BUTTON_W / 2, BACK_BUTTON_Y + BACK_BUTTON_H / 2, 2);
     tft.setTextDatum(TL_DATUM);
 }
 
 void updateCustomColorPreview()
 {
     uint32_t previewColor = tft.color565(redValue, greenValue, blueValue);
-    int previewY = 2 * COLOR_SLIDER_HEIGHT + COLOR_SLIDER_HEIGHT;          
-    int previewBoxHeight = SCREEN_HEIGHT - previewY - (BACK_BUTTON_H + 4); 
+    int previewY = 2 * COLOR_SLIDER_HEIGHT + COLOR_SLIDER_HEIGHT;
+    int previewBoxHeight = SCREEN_HEIGHT - previewY - (BACK_BUTTON_H + 4);
     if (previewBoxHeight < 10)
-        previewBoxHeight = COLOR_SLIDER_HEIGHT; 
+        previewBoxHeight = COLOR_SLIDER_HEIGHT;
 
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, previewY, COLOR_SLIDER_WIDTH, previewBoxHeight, previewColor);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, previewY, COLOR_SLIDER_WIDTH, previewBoxHeight, TFT_WHITE);
@@ -301,15 +305,15 @@ void refreshAllColorSliders()
     float barHeightGreen = greenValue * COLOR_SLIDER_HEIGHT / 255.0;
     float barHeightBlue = blueValue * COLOR_SLIDER_HEIGHT / 255.0;
 
-    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK); 
+    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_RED);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT - barHeightRed, COLOR_SLIDER_WIDTH, barHeightRed, TFT_RED);
 
-    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK); 
+    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_GREEN);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT - barHeightGreen, COLOR_SLIDER_WIDTH, barHeightGreen, TFT_GREEN);
 
-    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK); 
+    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
     tft.drawRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 2 * COLOR_SLIDER_HEIGHT, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLUE);
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 3 * COLOR_SLIDER_HEIGHT - barHeightBlue, COLOR_SLIDER_WIDTH, barHeightBlue, TFT_BLUE);
 
@@ -319,15 +323,15 @@ void refreshAllColorSliders()
 void closeColorSelectors()
 {
     inCustomColorMode = false;
-    
+
     if (savedScreenBuffer != nullptr)
-    {                             
-        restoreSavedScreenArea(); 
+    {
+        restoreSavedScreenArea();
     }
-    
-    tft.fillScreen(TFT_BLACK); 
-    drawMainInterface();       
-    replayAllDrawings();       
+
+    tft.fillScreen(TFT_BLACK);
+    drawMainInterface();
+    replayAllDrawings();
 }
 
 void updateCurrentColor(uint32_t newColor)
@@ -338,20 +342,20 @@ void updateCurrentColor(uint32_t newColor)
 void updateConnectedDevicesCount()
 {
     char deviceCountBuffer[10];
-    sprintf(deviceCountBuffer, "%d", macSet.size()); 
+    sprintf(deviceCountBuffer, "%d", macSet.size());
 
     tft.fillRect(SLEEP_BUTTON_X, SLEEP_BUTTON_Y, SLEEP_BUTTON_W, SLEEP_BUTTON_H, TFT_BLUE);
-    tft.setTextColor(TFT_WHITE, TFT_BLUE); 
+    tft.setTextColor(TFT_WHITE, TFT_BLUE);
     tft.setTextDatum(MC_DATUM);
     tft.drawString(String(deviceCountBuffer),
                    SLEEP_BUTTON_X + SLEEP_BUTTON_W / 2,
                    SLEEP_BUTTON_Y + SLEEP_BUTTON_H / 2,
-                   1);          
-    tft.setTextDatum(TL_DATUM); 
+                   1);
+    tft.setTextDatum(TL_DATUM);
 }
 
 void saveScreenArea()
-{ 
+{
     if (savedScreenBuffer == nullptr)
     {
         int bufferHeight = 4 * COLOR_SLIDER_HEIGHT;
@@ -379,24 +383,24 @@ void restoreSavedScreenArea()
 }
 
 void clearScreenAndCache()
-{ 
+{
     allDrawingHistory.clear();
     tft.fillScreen(TFT_BLACK);
     drawMainInterface();
 }
 
 void hideStarButton()
-{ 
+{
     tft.fillRect(CUSTOM_COLOR_BUTTON_X, CUSTOM_COLOR_BUTTON_Y, CUSTOM_COLOR_BUTTON_W, CUSTOM_COLOR_BUTTON_H, TFT_BLACK);
 }
 
 void showStarButton()
-{ 
+{
     drawStarButton();
 }
 
 void redrawStarButton()
-{ 
+{
     hideStarButton();
     drawStarButton();
 }
@@ -405,12 +409,12 @@ void redrawStarButton()
 void drawArcSlice(int x, int y, int r, int thickness, int start_angle, int end_angle, uint16_t color)
 {
     if (start_angle == end_angle)
-        return; 
+        return;
 
     start_angle = start_angle % 360;
     end_angle = end_angle % 360;
     if (end_angle == 0 && start_angle < 359)
-        end_angle = 360; 
+        end_angle = 360;
 
     int angle_offset = -90;
     uint32_t sa = (start_angle + angle_offset + 360) % 360;
@@ -425,7 +429,7 @@ void drawSendProgressIndicator()
         return;
 
     tft.drawCircle(SEND_PROGRESS_X, SEND_PROGRESS_Y, PROGRESS_CIRCLE_RADIUS, PROGRESS_BG_COLOR);
-    tft.drawCircle(SEND_PROGRESS_X, SEND_PROGRESS_Y, PROGRESS_CIRCLE_RADIUS - PROGRESS_CIRCLE_THICKNESS, PROGRESS_BG_COLOR); 
+    tft.drawCircle(SEND_PROGRESS_X, SEND_PROGRESS_Y, PROGRESS_CIRCLE_RADIUS - PROGRESS_CIRCLE_THICKNESS, PROGRESS_BG_COLOR);
 
     if (sendProgressTotal > 0 && sendProgressCurrent > 0)
     {
@@ -476,8 +480,8 @@ void updateSendProgress(int current, int total)
     showSendProgress = true;
 
     if (!inCustomColorMode)
-    {                                
-        drawSendProgressIndicator(); 
+    {
+        drawSendProgressIndicator();
     }
 
     if (current >= total)
@@ -664,15 +668,15 @@ void showCoffeePopup() {
     int qrHeightInPixels = 29 * qrPixelSize; // 二维码的屏幕高度
     int spacingBetweenQRs = 10; // 两个二维码之间的间距
     int totalQRWidth = 2 * qrWidthInPixels + spacingBetweenQRs;
-    
+
     int qrCommonY = textY + lineHeight; // 二维码的共同起始Y坐标 (在标签下方)
 
     // 绘制支付宝二维码
     int qrAlipayOffsetX = popupX + (popupW - totalQRWidth) / 2;
     tft.setTextDatum(TC_DATUM);
     tft.drawString("Alipay", qrAlipayOffsetX + qrWidthInPixels / 2, textY, 1); // 标签字体大小1
-    
-    char lineBuffer[35]; 
+
+    char lineBuffer[35];
     const char *p_alipay = qr_data_alipay;
     int currentY_alipay = qrCommonY;
 
@@ -690,13 +694,13 @@ void showCoffeePopup() {
             }
         }
         currentY_alipay += qrPixelSize;
-        if (currentY_alipay > popupY + popupH - 5 - qrPixelSize) break; 
+        if (currentY_alipay > popupY + popupH - 5 - qrPixelSize) break;
     }
 
     // 绘制微信二维码
     int qrWechatOffsetX = qrAlipayOffsetX + qrWidthInPixels + spacingBetweenQRs;
     tft.drawString("WeChat", qrWechatOffsetX + qrWidthInPixels / 2, textY, 1); // 标签字体大小1
-    
+
     const char *p_wechat = qr_data_wechat;
     int currentY_wechat = qrCommonY;
 
@@ -735,7 +739,7 @@ void showCoffeePopup() {
         "E.EEE.E.EE.E.EEE..E.EEE.E\n"
         "E.EEE.E...E.E...E.E.EEE.E\n"
         "E.....E.E.E....EE.E.....E\n"
-        "EEEEEEE.E.E.E.E.E.EEEEEEE\n"
+        "EEEEEEE.E.E.E.E.E.E.EEEEEEE\n"
         "............E.EEE........\n"
         "EEEEE.EEEEE.EE...E.E.E.E.\n"
         "EE.EEE.E.E...E..E..E...E.\n"
@@ -776,7 +780,7 @@ void showCoffeePopup() {
         if (currentY_blog > popupY + popupH - 5 - qrPixelSize - lineHeight) break; // 避免覆盖关闭提示
     }
     // --- 结束新增 Shapaper's Blog 二维码 ---
-    
+
     tft.setTextDatum(BC_DATUM);
     tft.drawString("(Tap to close)", popupX + popupW / 2, popupY + popupH - 5, 1);
     tft.setTextDatum(TL_DATUM);
@@ -889,11 +893,11 @@ void showProjectInfoPopup() {
         "........EE....EEE...E...EE...\n"
         "EEEEEEE...E.E.EEE.EEE.E.EE...\n"
         "E.....E..E....E.EE.EE...E...E\n"
-        "E.EEE.E.EEE..EE...EEEEEEEE..E\n"
-        "E.EEE.E.EE..E..E...EEE.E....E\n"
-        "E.EEE.E..EE...EE....EE.EE.EEE\n"
-        "E.....E.EEE.EEE.E.E....E.EE.E\n"
-        "EEEEEEE.E..EE..EE.EEE..EEE...";
+        "E.EEE.E.E.EEEEEEEEEEE.E..E.E.\n"
+        "E.EEE.E.EEE.E.EEEEE.EEEEE.E.E\n"
+        "E.EEE.E.EEE.....E....EE.E.E.E\n"
+        "E.....E.E.EE...EEEEEEE..E.E.E\n"
+        "EEEEEEE.E..EEE.E.E.EEEEEE.E.E";
 
     int qrPixelSize = 2; // 每个二维码“像素”的大小
     int qrWidthInChars = 29; // 二维码的字符宽度
@@ -925,7 +929,7 @@ void showProjectInfoPopup() {
         currentY_qr += qrPixelSize;
         if (currentY_qr > popupY + popupH - 5 - qrPixelSize - lineHeight) break; // 避免覆盖关闭提示
     }
-    
+
     textY = currentY_qr + lineHeight / 2; // 更新textY到二维码下方
 
     // Shapaper的贡献信息移到二维码下方

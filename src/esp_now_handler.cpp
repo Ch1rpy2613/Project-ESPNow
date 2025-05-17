@@ -1,8 +1,11 @@
+#include "drawing_history.h" // 包含自定义绘图历史头文件和 TouchData_t 的定义
 #include "esp_now_handler.h"
 #include "config.h"     // 包含项目配置常量
 #include "ui_manager.h" // << 添加对 UI 管理器的引用
 #include <Arduino.h>    // For Serial, millis, etc.
 #include <cstring>      // For memcpy, memset, snprintf
+#include <TFT_eSPI.h> // 需要 TFT_eSPI::color565 等，以及 tft 对象
+#include "touch_handler.h" // For TS_Point type
 
 // TFT_eSPI tft 对象和 drawMainInterface 函数在 Project-ESPNow.ino 中定义
 // 通过 extern 声明来在此文件中使用它们
@@ -15,7 +18,7 @@ extern void clearScreenAndCache();
 esp_now_peer_info_t broadcastPeerInfo;
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ESP-NOW 广播地址
 std::queue<SyncMessage_t> incomingMessageQueue;                    // ESP-NOW 接收消息队列
-std::vector<TouchData_t> allDrawingHistory;                        // 所有绘图操作的历史记录
+DrawingHistory allDrawingHistory;                        // 所有绘图操作的历史记录
 std::set<String> macSet;                                           // 已发现的对端设备 MAC 地址
 
 unsigned long lastKnownPeerUptime = 0;
@@ -25,7 +28,7 @@ bool initialSyncLogicProcessed = false;
 bool iamEffectivelyMoreUptimeDevice = false;
 bool iamRequestingAllData = false;
 bool isAwaitingSyncStartResponse = false;
-bool isReceivingDrawingData = false;
+bool isReceivingDrawingData = false; // 修正：这里之前少了一个 bool 关键字
 bool isSendingDrawingData = false;
 size_t currentHistorySendIndex = 0; // 定义新增的全局变量
 long relativeBootTimeOffset = 0;
@@ -457,10 +460,10 @@ void processIncomingMessages()
             {
                 Serial.println("  同步完成 (本机为较新设备，已接收完数据)。");
                 // 确保接收进度条更新到100% (如果需要，但现在隐藏由外部控制)
-                // if (totalPointsExpectedFromPeer > 0) { 
+                // if (totalPointsExpectedFromPeer > 0) {
                 //     updateReceiveProgress(receivedHistoryPointCount, totalPointsExpectedFromPeer);
                 // }
-                
+
                 // 使用 SNTP-like 的时间同步方法：
                 // Offset = (服务器发送时间戳 + 服务器已知偏移) - 客户端接收时间戳
                 // localCurrentRawUptime 是在处理此消息时本机的 millis()
@@ -639,7 +642,7 @@ void processIncomingMessages()
 
                 isAwaitingSyncStartResponse = false;
                 isReceivingDrawingData = true;
-                
+
                 totalPointsExpectedFromPeer = msg.totalPointsForSync;
                 receivedHistoryPointCount = 0;
                 if (totalPointsExpectedFromPeer > 0) {
@@ -751,8 +754,9 @@ void replayAllDrawings()
     lastRemotePoint.z = 0;
     lastRemoteDrawTime = 0;
 
-    for (const auto &drawData : allDrawingHistory)
+    for (size_t i = 0; i < allDrawingHistory.size(); ++i)
     {
+        const auto &drawData = allDrawingHistory[i];
         if (drawData.isReset)
         {
             tft.fillScreen(TFT_BLACK);

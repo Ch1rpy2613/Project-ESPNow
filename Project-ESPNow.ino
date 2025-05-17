@@ -14,6 +14,7 @@
 //            添加历史记录同步功能，支持多设备间的绘图历史同步。
 //            感谢群友 2093416185 (shapaper@126.com)。
 // 2025.5.10: 修复了清屏bug,同步bug,并且优化了debug按钮，添加了嵌入式的coffee按钮（已获得Kurio Reiko授权）。
+// 2025.5.17: 支持触摸点超过2048个的情况
 #include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 #include <TFT_eSPI.h>

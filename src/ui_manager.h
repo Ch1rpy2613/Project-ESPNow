@@ -5,8 +5,9 @@
 #include <TFT_eSPI.h>
 #include <set>               // For std::set
 #include <string>            // For String (used in std::set<String> macSet)
-#include <vector>            // For std::vector (used in allDrawingHistory)
 #include "esp_now_handler.h" // For TouchData_t, macSet, allDrawingHistory, relativeBootTimeOffset, replayAllDrawings
+#include "power_manager.h" // 包含电源管理器头文件，用于 isScreenOn
+#include "drawing_history.h" // 包含自定义绘图历史头文件
 
 // --- Extern Global Variables ---
 // These are defined in Project-ESPNow.ino or other modules and used here.
@@ -35,7 +36,7 @@ extern uint16_t *savedScreenBuffer; // 用于保存调色界面覆盖区域的�
 
 // Variables from other modules needed by UI functions
 extern std::set<String> macSet;                    // 来自 esp_now_handler.h (用于设备计数)
-extern std::vector<TouchData_t> allDrawingHistory; // 来自 esp_now_handler.h (用于调试信息)
+extern DrawingHistory allDrawingHistory; // 来自 esp_now_handler.h (用于调试信息)
 extern long relativeBootTimeOffset;                // 来自 esp_now_handler.h (用于调试信息)
 // isScreenOn (如果 drawDebugInfo 需要) 会通过包含 power_manager.h 在 ui_manager.cpp 中获得
 

@@ -15,6 +15,8 @@
 //            感谢群友 2093416185 (shapaper@126.com)。
 // 2025.5.10: 修复了清屏bug,同步bug,并且优化了debug按钮，添加了嵌入式的coffee按钮（已获得Kurio Reiko授权）。
 // 2025.5.17: 支持触摸点超过2048个的情况
+// 2025.5.17: 新增对端信息界面和心跳包逻辑，10s无心跳认为对端下线。
+
 #include <SPI.h>
 #include <XPT2046_Touchscreen.h>
 #include <TFT_eSPI.h>
@@ -25,6 +27,7 @@
 #include <set>
 #include <vector>
 #include <cmath>      // 用于 abs()
+#include <map>        // For std::map (needed for peerInfoMap)
 
 #include "src/config.h" // 引入配置文件
 #include "src/esp_now_handler.h" // 引入 ESP-NOW 处理模块
@@ -65,6 +68,7 @@ unsigned long lastBroadcastTime = 0;         // 上次广播 MAC 地址发现消
 unsigned long lastUptimeInfoBroadcastTime = 0; // 上次广播 Uptime 信息的时间戳 (ESP-NOW模块也用)
 unsigned long lastDebugInfoUpdateTime = 0;   // 上次更新调试信息区域的时间戳 (UI模块用)
 unsigned long lastHeartbeatSendTime = 0;     // 新增：上次发送心跳包的时间戳
+unsigned long lastPeerInfoUpdateTime = 0;    // 新增：上次更新对端信息界面的时间戳
 
 
 // 屏幕状态变量 (isScreenOn) 已移至 power_manager.cpp (作为 extern)
@@ -75,7 +79,7 @@ unsigned long lastHeartbeatSendTime = 0;     // 新增：上次发送心跳包�
 void setup()
 {
     Serial.begin(115200);
-    
+
     // 1. 初始化自定义模块
     powerManagerInit();  // 初始化电源管理 (引脚设置, LED, 按钮)
     uiManagerInit();     // 初始化 UI 管理器 (如果需要特定设置)
@@ -88,19 +92,19 @@ void setup()
 
     tft.init();
     tft.setRotation(1); // 设置TFT显示方向
-    
+
     // 3. 初始化 WiFi 和 ESP-NOW
-    WiFi.mode(WIFI_STA); 
+    WiFi.mode(WIFI_STA);
     WiFi.disconnect();   // 断开之前的连接，确保ESP-NOW在干净的状态下初始化
     espNowInit();        // 初始化 ESP-NOW (来自 esp_now_handler.cpp)
 
     // 4. 记录启动时间 (调试用)
-    deviceInitialBootMillis = millis(); 
+    deviceInitialBootMillis = millis();
     Serial.print("设备初始启动毫秒数: ");
     Serial.println(deviceInitialBootMillis);
 
     // 5. 初始 UPTIME_INFO 广播 (在所有核心服务初始化后)
-    SyncMessage_t initialUptimeMsg; // 已重命名以避免冲突
+    SyncMessage_t initialUptimeMsg; // 已重命名以避免与 setup 中的 uptimeMsg 冲突
     initialUptimeMsg.type = MSG_TYPE_UPTIME_INFO;
     initialUptimeMsg.senderUptime = millis();
     initialUptimeMsg.senderOffset = relativeBootTimeOffset; // 来自 esp_now_handler 的 extern 变量
@@ -133,11 +137,18 @@ void loop()
         uptimeMsgLoop.senderUptime = currentTimeForLoop;
         uptimeMsgLoop.senderOffset = relativeBootTimeOffset; // 来自 esp_now_handler 的 extern 变量
         memset(&uptimeMsgLoop.touch_data, 0, sizeof(TouchData_t));
+        // 新增：填充内存信息
+        uptimeMsgLoop.usedMemory = esp_get_free_heap_size();
+        uptimeMsgLoop.totalMemory = ESP.getHeapSize();
         sendSyncMessage(&uptimeMsgLoop); // 来自 esp_now_handler.cpp
         lastUptimeInfoBroadcastTime = currentTimeForLoop;
     }
 
     // 2. 发送心跳包
+    // 心跳包现在也包含内存信息，并且用于心跳超时检测。
+    // UPTIME_INFO 消息现在也包含内存信息，并且用于同步决策。
+    // 两个消息都包含内存信息，确保对端能收到最新的内存数据。
+    // 我们可以保留心跳包，因为它有专门的心跳超时检测逻辑。
     if (currentTimeForLoop - lastHeartbeatSendTime >= HEARTBEAT_SEND_INTERVAL_MS) {
         sendHeartbeat(); // 来自 esp_now_handler.cpp
         lastHeartbeatSendTime = currentTimeForLoop;
@@ -152,12 +163,12 @@ void loop()
         drawDebugInfo(); // 来自 ui_manager.cpp
         lastDebugInfoUpdateTime = currentTimeForLoop;
     }
-    
-    // 5. 更新连接设备计数 (如果不在调色模式)
-    // inCustomColorMode 是来自 ui_manager 的 extern 变量
-    if (!inCustomColorMode && (currentTimeForLoop - lastBroadcastTime >= BROADCAST_INTERVAL)) { // BROADCAST_INTERVAL 也用于设备数量的UI更新
+
+    // 5. 更新连接设备计数 (如果不在调色模式且在主界面)
+    // inCustomColorMode 和 currentUIState 是来自 ui_manager 的 extern 变量
+    if (!inCustomColorMode && currentUIState == UI_STATE_MAIN && (currentTimeForLoop - lastBroadcastTime >= BROADCAST_INTERVAL)) { // BROADCAST_INTERVAL 也用于设备数量的UI更新
         updateConnectedDevicesCount(); // 来自 ui_manager.cpp
-        lastBroadcastTime = currentTimeForLoop; 
+        lastBroadcastTime = currentTimeForLoop;
     }
 
     // 6. 管理屏幕关闭时的 LED 状态 (包括呼吸灯)
@@ -166,6 +177,13 @@ void loop()
         updateBreathLED(); // 来自 power_manager.cpp
     }
     manageScreenStateLEDs(); // 来自 power_manager.cpp (根据 isScreenOn 处理其他 LED)
+
+    // 7. 周期性更新对端信息界面 (如果当前处于该界面)
+    // currentUIState 和 isPeerInfoScreenVisible 是来自 ui_manager 的 extern 变量
+    if (currentUIState == UI_STATE_PEER_INFO && isPeerInfoScreenVisible && (currentTimeForLoop - lastPeerInfoUpdateTime >= PEER_INFO_UPDATE_INTERVAL)) {
+        updatePeerInfoScreen(); // 来自 ui_manager.cpp
+        lastPeerInfoUpdateTime = currentTimeForLoop;
+    }
 
     // 短暂延时，避免过于频繁的循环，给其他任务（如WiFi栈）一些时间
     // delay(1); // 可选，根据实际情况调整

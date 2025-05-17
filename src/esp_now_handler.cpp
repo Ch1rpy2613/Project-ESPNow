@@ -6,6 +6,8 @@
 #include <cstring>      // For memcpy, memset, snprintf
 #include <TFT_eSPI.h> // 需要 TFT_eSPI::color565 等，以及 tft 对象
 #include "touch_handler.h" // For TS_Point type
+#include <vector> // 用于 getPeerInfoList 返回值
+#include <map> // 用于 std::map
 
 // TFT_eSPI tft 对象和 drawMainInterface 函数在 Project-ESPNow.ino 中定义
 // 通过 extern 声明来在此文件中使用它们
@@ -20,7 +22,14 @@ uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // ESP-NOW �
 std::queue<SyncMessage_t> incomingMessageQueue;                    // ESP-NOW 接收消息队列
 DrawingHistory allDrawingHistory;                        // 所有绘图操作的历史记录
 std::set<String> macSet;                                           // 已发现的对端设备 MAC 地址
-std::map<String, unsigned long> peerLastHeartbeat; // 定义新增的全局变量：存储每个对端的最后心跳时间
+std::map<String, unsigned long> peerLastHeartbeat; // 存储每个对端的最后心跳时间
+
+// PeerInfo_t 结构体定义已移至 esp_now_handler.h
+// 已移除重复的 PeerInfo_s 结构体定义和 PeerInfo_t typedef
+
+// 新增：存储所有已知对端详细信息的 map
+std::map<String, PeerInfo_t> peerInfoMap;
+
 
 unsigned long lastKnownPeerUptime = 0;
 long lastKnownPeerOffset = 0;
@@ -109,6 +118,13 @@ void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPt
         macSet.insert(String(macStr)); // 添加到 MAC 地址集合中用于计数
         peerLastHeartbeat[String(macStr)] = millis(); // 更新对端的最后心跳时间
 
+        // 更新或添加对端详细信息
+        peerInfoMap[String(macStr)].macAddress = String(macStr);
+        peerInfoMap[String(macStr)].effectiveUptime = receivedMsg.senderUptime + receivedMsg.senderOffset;
+        peerInfoMap[String(macStr)].usedMemory = receivedMsg.usedMemory;
+        peerInfoMap[String(macStr)].totalMemory = receivedMsg.totalMemory;
+
+
         incomingMessageQueue.push(receivedMsg); // 将消息放入队列等待处理
     }
     else if (len == strlen("XX:XX:XX:XX:XX:XX") && incomingDataPtr[0] != '{')
@@ -119,6 +135,7 @@ void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPt
         macStr[len] = '\0';
         macSet.insert(String(macStr));
         peerLastHeartbeat[String(macStr)] = millis(); // 更新对端的最后心跳时间
+        // 对于旧版消息，我们没有内存信息，只更新心跳
     }
     else
     {
@@ -648,9 +665,12 @@ void processIncomingMessages()
 
                 totalPointsExpectedFromPeer = msg.totalPointsForSync;
                 receivedHistoryPointCount = 0;
-                if (totalPointsExpectedFromPeer > 0) {
+                if (totalPointsExpectedFromPeer > 0)
+                {
                     updateReceiveProgress(receivedHistoryPointCount, totalPointsExpectedFromPeer);
-                } else {
+                }
+                else
+                {
                     hideReceiveProgress(); // 如果对方没有点要发送，则隐藏进度条
                 }
 
@@ -701,7 +721,7 @@ void processIncomingMessages()
     // --- 分批发送历史数据逻辑 ---
     if (isSendingDrawingData)
     {
-        const size_t BATCH_SIZE = 15; // 每批发送15个点
+        const size_t BATCH_SIZE = 50; // 每批发送15个点
         size_t pointsSentThisCycle = 0;
         unsigned long batchSendStartTime = millis();        // 用于该批次消息的时间戳
         unsigned long currentSenderUptimeForMsg = millis(); // 获取一次，用于本批次所有消息
@@ -769,6 +789,9 @@ void sendHeartbeat()
     heartbeatMsg.senderOffset = relativeBootTimeOffset;
     memset(&heartbeatMsg.touch_data, 0, sizeof(TouchData_t));
     heartbeatMsg.totalPointsForSync = 0; // 心跳包不需要这个字段
+    // 获取并添加内存信息
+    heartbeatMsg.usedMemory = esp_get_free_heap_size(); // 使用 esp_get_free_heap_size 获取可用堆内存
+    heartbeatMsg.totalMemory = ESP.getHeapSize(); // 使用 ESP.getHeapSize 获取总堆内存
 
     sendSyncMessage(&heartbeatMsg);
     // Serial.println("发送心跳包."); // 调试信息，如果频繁发送可能会刷屏
@@ -799,9 +822,25 @@ void checkPeerHeartbeatTimeout()
     {
         peerLastHeartbeat.erase(mac);
         macSet.erase(mac); // 同时从 macSet 中移除
+        peerInfoMap.erase(mac); // 新增：从对端信息 map 中移除
         // TODO: 如果需要，更新 UI 显示的对端数量
         // 例如：updatePeerCountDisplay(macSet.size());
     }
+}
+
+// 新增：获取对端信息列表
+std::vector<PeerInfo_t> getPeerInfoList() {
+    std::vector<PeerInfo_t> peerList;
+    int count = 0;
+    for (auto const& [mac, peerInfo] : peerInfoMap) {
+        if (count < MAX_PEERS_TO_DISPLAY) { // 限制返回的数量
+            peerList.push_back(peerInfo);
+            count++;
+        } else {
+            break;
+        }
+    }
+    return peerList;
 }
 
 

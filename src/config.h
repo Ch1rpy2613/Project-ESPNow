@@ -38,11 +38,15 @@
 #define COLOR_BUTTON_START_Y (RESET_BUTTON_Y + RESET_BUTTON_H + 2) // 颜色按钮起始 Y 坐标 (更紧凑)
 #define COLOR_BUTTON_SPACING 2                                     // 颜色按钮间距
 
-// P (休眠/电源) 按钮位置和大小
-#define SLEEP_BUTTON_X RESET_BUTTON_X                                                    // 休眠按钮 X 坐标 (与重置按钮对齐)
-#define SLEEP_BUTTON_Y (COLOR_BUTTON_START_Y + (COLOR_BUTTON_HEIGHT + COLOR_BUTTON_SPACING) * 4) // 休眠按钮 Y 坐标 (在颜色按钮下方)
-#define SLEEP_BUTTON_W 10                                                                        // 休眠按钮宽度
-#define SLEEP_BUTTON_H 10                                                                        // 休眠按钮高度
+// 对端信息按钮位置和大小
+#define PEER_INFO_BUTTON_X RESET_BUTTON_X                                                    // 对端信息按钮 X 坐标 (与重置按钮对齐)
+#define PEER_INFO_BUTTON_Y (COLOR_BUTTON_START_Y + (COLOR_BUTTON_HEIGHT + COLOR_BUTTON_SPACING) * 4) // 对端信息按钮 Y 坐标 (在颜色按钮下方)
+#define PEER_INFO_BUTTON_W 10                                                                        // 对端信息按钮宽度
+#define PEER_INFO_BUTTON_H 10                                                                        // 对端信息按钮高度
+
+// 对端信息界面相关常量
+#define MAX_PEERS_TO_DISPLAY 8 // 对端信息界面最多显示的对端数量
+#define PEER_INFO_UPDATE_INTERVAL 500UL // 对端信息界面更新间隔 (毫秒)
 
 // 自定义颜色按钮 ("*") 位置和大小
 #define CUSTOM_COLOR_BUTTON_X (SCREEN_WIDTH - COLOR_BUTTON_WIDTH - 4) // 自定义颜色按钮 X 坐标 (屏幕右侧)
@@ -107,7 +111,7 @@
 #define PROGRESS_CIRCLE_RADIUS 8
 #define PROGRESS_CIRCLE_THICKNESS 3
 #define SEND_PROGRESS_X (RESET_BUTTON_X + PROGRESS_CIRCLE_RADIUS) // 与重置按钮左对齐，并考虑半径
-#define SEND_PROGRESS_Y (SLEEP_BUTTON_Y + SLEEP_BUTTON_H + PROGRESS_CIRCLE_RADIUS + 5) // 休眠按钮下方
+#define SEND_PROGRESS_Y (PEER_INFO_BUTTON_Y + PEER_INFO_BUTTON_H + PROGRESS_CIRCLE_RADIUS + 5) // 对端信息按钮下方
 #define RECEIVE_PROGRESS_X SEND_PROGRESS_X
 #define RECEIVE_PROGRESS_Y (SEND_PROGRESS_Y + 2 * PROGRESS_CIRCLE_RADIUS + 5) // 发送进度条下方
 #define PROGRESS_SEND_COLOR TFT_BLUE
@@ -123,7 +127,7 @@
 // "Coffee" 按钮 (调试按钮上方)
 #define COFFEE_BUTTON_X DEBUG_TOGGLE_BUTTON_X      // 与调试按钮 X 坐标相同
 #define COFFEE_BUTTON_W DEBUG_TOGGLE_BUTTON_W      // 与调试按钮宽度相同
-#define COFFEE_BUTTON_H DEBUG_TOGGLE_BUTTON_H      // 与调试按钮高度相同
+#define COFFEE_BUTTON_H COFFEE_BUTTON_W      // 与调试按钮高度相同
 #define COFFEE_BUTTON_Y (DEBUG_TOGGLE_BUTTON_Y - COFFEE_BUTTON_H - 2) // 在调试按钮上方，间隔2像素
 
 #endif // CONFIG_H

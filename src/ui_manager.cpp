@@ -6,14 +6,18 @@
 #include <cmath>      // 包含 cmath 库，用于 round 函数
 #include <algorithm>  // 包含 algorithm 库，用于 min/max 函数
 #include "drawing_history.h" // 包含自定义绘图历史头文件
+#include "esp_now_handler.h" // 包含 esp_now_handler.h 以访问 PeerInfo_t 和 peerInfoMap
+#include <esp_wifi.h> // 用于获取本机 MAC 地址
 
 // --- 全局 UI 状态变量 (在此定义) ---
+UIState_t currentUIState = UI_STATE_MAIN; // 当前 UI 状态
 uint32_t currentColor = TFT_BLUE; // Default to blue, consistent with .ino // 默认为蓝色, 与 .ino 文件一致
 bool inCustomColorMode = false;
 bool isDebugInfoVisible = false;   // 调试信息框默认关闭
 bool showDebugToggleButton = true; // 调试信息切换按钮默认显示
 bool isProjectInfoPopupVisible = false; // 项目信息弹窗默认关闭
 bool isCoffeePopupVisible = false;    // "Coffee" 弹窗默认关闭
+bool isPeerInfoScreenVisible = false; // 对端信息界面默认关闭
 
 // 进度条状态变量定义
 int sendProgressTotal = 0;
@@ -33,9 +37,10 @@ extern TFT_eSPI tft;    // 定义于 Project-ESPNow.ino
 extern bool isScreenOn; // 来自 power_manager 模块 (通过 ui_manager.h 间接包含 power_manager.h)
 // lastLocalPoint 和 lastLocalTouchTime 是 touch_handler 模块的内部状态, 不应在此 extern 或修改
 
-// macSet, allDrawingHistory, relativeBootTimeOffset 已在 ui_manager.h 中 extern 声明
+// macSet, allDrawingHistory, relativeBootTimeOffset, peerInfoMap 已在 ui_manager.h 中 extern 声明
 // replayAllDrawings() 已在 esp_now_handler.h 中声明
 // lastRemotePoint, lastRemoteDrawTime 已在 esp_now_handler.h 中 extern 声明
+// getPeerInfoList() 已在 esp_now_handler.h 中声明
 
 // --- 函数实现 ---
 
@@ -49,8 +54,7 @@ void drawMainInterface()
     tft.fillScreen(TFT_BLACK);
     drawResetButton();
     drawColorButtons();
-    drawSleepButton(); // 此函数内部会调用 updateConnectedDevicesCount
-    // drawCustomColorButton(); // 这只是颜色框, drawStarButton 包含 "*"
+    drawPeerInfoButton(); // 此函数内部会调用 updateConnectedDevicesCount
     drawStarButton(); // 绘制颜色框和 "*"
     if (isScreenOn && !inCustomColorMode)
     {
@@ -80,14 +84,21 @@ void drawMainInterface()
 void redrawMainScreen()
 {
     tft.fillScreen(TFT_BLACK);
-    drawMainInterface(); // 这会根据 isDebugInfoVisible 和 showDebugToggleButton 绘制正确的状态
-    if (isProjectInfoPopupVisible) { // 如果项目信息弹窗之前是可见的，重绘它
-        showProjectInfoPopup();
-    } else if (isCoffeePopupVisible) { // 如果 Coffee 弹窗之前是可见的，重绘它
-        showCoffeePopup();
-    } else {
-        replayAllDrawings(); // 否则重绘历史笔迹
+    if (currentUIState == UI_STATE_MAIN) {
+        drawMainInterface(); // 这会根据 isDebugInfoVisible 和 showDebugToggleButton 绘制正确的状态
+        if (isProjectInfoPopupVisible) { // 如果项目信息弹窗之前是可见的，重绘它
+            showProjectInfoPopup();
+        } else if (isCoffeePopupVisible) { // 如果 Coffee 弹窗之前是可见的，重绘它
+            showCoffeePopup();
+        } else {
+            replayAllDrawings(); // 否则重绘历史笔迹
+        }
+    } else if (currentUIState == UI_STATE_COLOR_PICKER) {
+        drawColorSelectors();
+    } else if (currentUIState == UI_STATE_PEER_INFO) {
+        drawPeerInfoScreen();
     }
+    // UI_STATE_POPUP 状态由 show/hide 函数直接处理绘制
 }
 
 void drawResetButton()
@@ -113,10 +124,10 @@ void drawColorButtons()
     }
 }
 
-void drawSleepButton()
+void drawPeerInfoButton()
 {
-    tft.fillRect(SLEEP_BUTTON_X, SLEEP_BUTTON_Y, SLEEP_BUTTON_W, SLEEP_BUTTON_H, TFT_BLUE);
-    updateConnectedDevicesCount();
+    tft.fillRect(PEER_INFO_BUTTON_X, PEER_INFO_BUTTON_Y, PEER_INFO_BUTTON_W, PEER_INFO_BUTTON_H, TFT_BLUE);
+    updateConnectedDevicesCount(); // 更新按钮上的设备计数
 }
 
 void drawCustomColorButton()
@@ -146,7 +157,7 @@ void drawDebugInfo()
     int rectHeight = 4 * lineHeight + 2;
 
     // 如果弹窗可见，则不绘制调试信息背景，避免覆盖弹窗
-    if (!isProjectInfoPopupVisible) {
+    if (!isProjectInfoPopupVisible && !isCoffeePopupVisible) {
         tft.fillRect(startX, startY, 120, rectHeight, bgColor);
     }
 
@@ -195,11 +206,12 @@ bool isColorButtonPressed(int x, int y, uint32_t &selectedColor)
     return false;
 }
 
-bool isSleepButtonPressed(int x, int y)
+bool isPeerInfoButtonPressed(int x, int y)
 {
-    return x >= SLEEP_BUTTON_X && x <= SLEEP_BUTTON_X + SLEEP_BUTTON_W &&
-           y >= SLEEP_BUTTON_Y && y <= SLEEP_BUTTON_Y + SLEEP_BUTTON_H;
+    return x >= PEER_INFO_BUTTON_X && x <= PEER_INFO_BUTTON_X + PEER_INFO_BUTTON_W &&
+           y >= PEER_INFO_BUTTON_Y && y <= PEER_INFO_BUTTON_Y + PEER_INFO_BUTTON_H;
 }
+
 
 bool isCustomColorButtonPressed(int x, int y)
 {
@@ -278,6 +290,7 @@ void updateSingleColorSlider(int yPos, uint32_t sliderColor, int &channelValue)
 
 void drawColorSelectors()
 {
+    // tft.fillScreen(TFT_BLACK); // 清屏 - 移除此行，调色盘应覆盖在当前屏幕上
     refreshAllColorSliders();
 
     tft.fillRect(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_W, BACK_BUTTON_H, TFT_DARKGREY);
@@ -305,8 +318,8 @@ void refreshAllColorSliders()
     float barHeightGreen = greenValue * COLOR_SLIDER_HEIGHT / 255.0;
     float barHeightBlue = blueValue * COLOR_SLIDER_HEIGHT / 255.0;
 
-    // 清除旧的数值显示区域
-    tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, 0, 40, 3 * COLOR_SLIDER_HEIGHT, TFT_BLACK);
+    // 清除旧的数值显示区域 - 减小宽度
+    //tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, 0, 40, 3 * COLOR_SLIDER_HEIGHT, TFT_BLACK); // 减小清除区域宽度
 
     // 绘制红色滑块
     tft.fillRect(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, COLOR_SLIDER_HEIGHT, TFT_BLACK);
@@ -317,7 +330,7 @@ void refreshAllColorSliders()
     sprintf(redBuffer, "%d(#%02X)", redValue, redValue); // 十进制(十六进制)
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.setTextSize(1);
-    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, 2); // 调整位置以容纳更长的文本
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, 2); // 调整位置以适应新的清除区域宽度
     tft.print(redBuffer);
 
     // 绘制绿色滑块
@@ -328,7 +341,7 @@ void refreshAllColorSliders()
     char greenBuffer[10];
     sprintf(greenBuffer, "%d(#%02X)", greenValue, greenValue); // 十进制(十六进制)
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, COLOR_SLIDER_HEIGHT + 2); // 调整位置
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, COLOR_SLIDER_HEIGHT + 2); // 调整位置
     tft.print(greenBuffer);
 
     // 绘制蓝色滑块
@@ -339,7 +352,7 @@ void refreshAllColorSliders()
     char blueBuffer[10];
     sprintf(blueBuffer, "%d(#%02X)", blueValue, blueValue); // 十进制(十六进制)
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 60, 2 * COLOR_SLIDER_HEIGHT + 2); // 调整位置
+    tft.setCursor(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4 - 40, 2 * COLOR_SLIDER_HEIGHT + 2); // 调整位置
     tft.print(blueBuffer);
 
     updateCustomColorPreview();
@@ -348,6 +361,7 @@ void refreshAllColorSliders()
 void closeColorSelectors()
 {
     inCustomColorMode = false;
+    currentUIState = UI_STATE_MAIN; // 切换回主界面状态
 
     if (savedScreenBuffer != nullptr)
     {
@@ -367,14 +381,14 @@ void updateCurrentColor(uint32_t newColor)
 void updateConnectedDevicesCount()
 {
     char deviceCountBuffer[10];
-    sprintf(deviceCountBuffer, "%d", macSet.size());
+    sprintf(deviceCountBuffer, "%d", peerInfoMap.size()); // 使用 peerInfoMap 的大小
 
-    tft.fillRect(SLEEP_BUTTON_X, SLEEP_BUTTON_Y, SLEEP_BUTTON_W, SLEEP_BUTTON_H, TFT_BLUE);
+    tft.fillRect(PEER_INFO_BUTTON_X, PEER_INFO_BUTTON_Y, PEER_INFO_BUTTON_W, PEER_INFO_BUTTON_H, TFT_BLUE);
     tft.setTextColor(TFT_WHITE, TFT_BLUE);
     tft.setTextDatum(MC_DATUM);
     tft.drawString(String(deviceCountBuffer),
-                   SLEEP_BUTTON_X + SLEEP_BUTTON_W / 2,
-                   SLEEP_BUTTON_Y + SLEEP_BUTTON_H / 2,
+                   PEER_INFO_BUTTON_X + PEER_INFO_BUTTON_W / 2,
+                   PEER_INFO_BUTTON_Y + PEER_INFO_BUTTON_H / 2,
                    1);
     tft.setTextDatum(TL_DATUM);
 }
@@ -399,7 +413,7 @@ void restoreSavedScreenArea()
     if (savedScreenBuffer != nullptr)
     {
         int pushHeight = 4 * COLOR_SLIDER_HEIGHT;
-        if (pushHeight > SCREEN_HEIGHT)
+        if (pushHeight > SCREEN_HEIGHT > SCREEN_HEIGHT)
             pushHeight = SCREEN_HEIGHT;
         tft.pushImage(SCREEN_WIDTH - COLOR_SLIDER_WIDTH - 4, 0, COLOR_SLIDER_WIDTH, pushHeight, savedScreenBuffer);
         delete[] savedScreenBuffer;
@@ -411,7 +425,7 @@ void clearScreenAndCache()
 {
     allDrawingHistory.clear();
     tft.fillScreen(TFT_BLACK);
-    drawMainInterface();
+    drawMainInterface(); // 清屏后重绘主界面骨架
 }
 
 void hideStarButton()
@@ -558,8 +572,8 @@ void hideReceiveProgress()
 // --- "Coffee" 按钮和弹窗函数 ---
 void drawCoffeeButton() {
     // 即使弹窗可见，按钮本身也绘制，只是点击行为可能不同或被忽略
-    // 或者，如果希望在弹窗时隐藏此按钮，可以添加: if (isCoffeePopupVisible) return;
-    if (!isScreenOn || inCustomColorMode || !showDebugToggleButton) return; // 如果D按钮不显示，C按钮也不显示
+    // 或者, 如果希望在弹窗时隐藏此按钮, 可以添加: if (isCoffeePopupVisible) return;
+    if (!isScreenOn || inCustomColorMode || !showDebugToggleButton || currentUIState != UI_STATE_MAIN) return; // 如果D按钮不显示，C按钮也不显示，或不在主界面
 
     tft.fillRect(COFFEE_BUTTON_X, COFFEE_BUTTON_Y, COFFEE_BUTTON_W, COFFEE_BUTTON_H, TFT_ORANGE); // 使用橙色
     tft.setTextColor(TFT_BLACK, TFT_ORANGE);
@@ -569,13 +583,13 @@ void drawCoffeeButton() {
 }
 
 bool isCoffeeButtonPressed(int x, int y) {
-    if (!showDebugToggleButton) return false; // 如果D按钮不显示，C按钮也无效
+    if (!showDebugToggleButton || currentUIState != UI_STATE_MAIN) return false; // 如果D按钮不显示，C按钮也无效，或不在主界面
     return x >= COFFEE_BUTTON_X && x <= COFFEE_BUTTON_X + COFFEE_BUTTON_W &&
            y >= COFFEE_BUTTON_Y && y <= COFFEE_BUTTON_Y + COFFEE_BUTTON_H;
 }
 
 void showCoffeePopup() {
-    if (!isScreenOn || inCustomColorMode) return;
+    if (!isScreenOn || inCustomColorMode || currentUIState != UI_STATE_MAIN) return;
 
     isCoffeePopupVisible = true;
     // isDebugInfoVisible = false; // 打开C弹窗时，可以考虑隐藏D的调试信息区域
@@ -705,7 +719,7 @@ void showCoffeePopup() {
     const char *p_alipay = qr_data_alipay;
     int currentY_alipay = qrCommonY;
 
-    while (*p_alipay) {
+    for (int row = 0; row < 29 && *p_alipay; ++row) { // 假设支付宝二维码是29行
         int i = 0;
         while (*p_alipay && *p_alipay != '\n' && i < 30) {
             lineBuffer[i++] = *p_alipay++;
@@ -729,7 +743,7 @@ void showCoffeePopup() {
     const char *p_wechat = qr_data_wechat;
     int currentY_wechat = qrCommonY;
 
-    while (*p_wechat) {
+    for (int row = 0; row < 29 && *p_wechat; ++row) { // 假设微信二维码也是29行
         int i = 0;
         while (*p_wechat && *p_wechat != '\n' && i < 30) {
             lineBuffer[i++] = *p_wechat++;
@@ -784,13 +798,17 @@ void showCoffeePopup() {
         "E.....E.E.EE...EEEEEEE..E\n"
         "EEEEEEE.E..EEE.E.E.EEEEEE";
 
-    int qrBlogOffsetX = popupX + (popupW - qrWidthInPixels) / 2; // 单个二维码居中
+    int qrPixelSizeBlog = 2; // 博客二维码像素大小
+    int qrWidthInCharsBlog = 29; // 博客二维码字符宽度
+    int qrDisplayWidthBlog = qrWidthInCharsBlog * qrPixelSizeBlog;
+
+    int qrBlogOffsetX = popupX + (popupW - qrDisplayWidthBlog) / 2; // 单个二维码居中
     int currentY_blog = textY;
     const char *p_blog = qr_data_blog;
 
     for (int row = 0; row < 25 && *p_blog; ++row) { // 假设博客二维码也是25行 (根据txt内容调整)
         int i = 0;
-        while (*p_blog && *p_blog != '\n' && i < 30) { // 假设最大宽度30
+        while (*p_blog && *p_blog != '\n' && i < qrWidthInCharsBlog) {
             lineBuffer[i++] = *p_blog++;
         }
         lineBuffer[i] = '\0';
@@ -798,11 +816,11 @@ void showCoffeePopup() {
 
         for (int j = 0; j < i; ++j) {
             if (lineBuffer[j] == 'E') {
-                tft.fillRect(qrBlogOffsetX + j * qrPixelSize, currentY_blog, qrPixelSize, qrPixelSize, qrPixelColor);
+                tft.fillRect(qrBlogOffsetX + j * qrPixelSizeBlog, currentY_blog, qrPixelSizeBlog, qrPixelSizeBlog, qrPixelColor);
             }
         }
-        currentY_blog += qrPixelSize;
-        if (currentY_blog > popupY + popupH - 5 - qrPixelSize - lineHeight) break; // 避免覆盖关闭提示
+        currentY_blog += qrPixelSizeBlog;
+        if (currentY_blog > popupY + popupH - 5 - qrPixelSizeBlog - lineHeight) break; // 避免覆盖关闭提示
     }
     // --- 结束新增 Shapaper's Blog 二维码 ---
 
@@ -822,7 +840,7 @@ void hideCoffeePopup() {
 
 // --- 新增的项目信息按钮和弹窗函数 ---
 void drawInfoButton() {
-    if (!isScreenOn || inCustomColorMode || !isDebugInfoVisible || isProjectInfoPopupVisible || isCoffeePopupVisible) return; // 如果Coffee弹窗也显示，则不绘制
+    if (!isScreenOn || inCustomColorMode || !isDebugInfoVisible || isProjectInfoPopupVisible || isCoffeePopupVisible || currentUIState != UI_STATE_MAIN) return; // 如果Coffee弹窗也显示，则不绘制，或不在主界面
 
     tft.fillRect(INFO_BUTTON_X, INFO_BUTTON_Y, INFO_BUTTON_W, INFO_BUTTON_H, TFT_DARKGREEN);
     tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
@@ -832,13 +850,13 @@ void drawInfoButton() {
 }
 
 bool isInfoButtonPressed(int x, int y) {
-    if (!isDebugInfoVisible || isCoffeePopupVisible) return false; // 仅当调试信息可见且Coffee弹窗关闭时按钮才有效
+    if (!isDebugInfoVisible || isCoffeePopupVisible || currentUIState != UI_STATE_MAIN) return false; // 仅当调试信息可见且Coffee弹窗关闭时按钮才有效，且在主界面
     return x >= INFO_BUTTON_X && x <= INFO_BUTTON_X + INFO_BUTTON_W &&
            y >= INFO_BUTTON_Y && y <= INFO_BUTTON_Y + INFO_BUTTON_H;
 }
 
 void showProjectInfoPopup() {
-    if (!isScreenOn || inCustomColorMode || isCoffeePopupVisible) return; // 如果Coffee弹窗显示，则不显示此弹窗
+    if (!isScreenOn || inCustomColorMode || isCoffeePopupVisible || currentUIState != UI_STATE_MAIN) return; // 如果Coffee弹窗显示，则不显示此弹窗，或不在主界面
 
     isProjectInfoPopupVisible = true;
 
@@ -926,7 +944,7 @@ void showProjectInfoPopup() {
 
     int qrPixelSize = 2; // 每个二维码“像素”的大小
     int qrWidthInChars = 29; // 二维码的字符宽度
-    int qrHeightInChars = 29; // 二维码的字符高度
+    // int qrHeightInChars = 29; // 二维码的字符高度
     int qrDisplayWidth = qrWidthInChars * qrPixelSize;
     // int qrDisplayHeight = qrHeightInChars * qrPixelSize; // 未使用
 
@@ -938,7 +956,7 @@ void showProjectInfoPopup() {
     const char *p_author = qr_data_author;
     int currentY_qr = qrOffsetY;
 
-    for (int row = 0; row < qrHeightInChars && *p_author; ++row) {
+    for (int row = 0; row < 29 && *p_author; ++row) { // 假设作者二维码也是29行
         int i = 0;
         while (*p_author && *p_author != '\n' && i < qrWidthInChars) {
             lineBuffer[i++] = *p_author++;
@@ -974,6 +992,185 @@ void hideProjectInfoPopup() {
         isProjectInfoPopupVisible = false;
         redrawMainScreen(); // 重绘整个屏幕以清除弹窗并恢复UI
     }
+}
+
+// --- 对端信息界面函数实现 ---
+
+void drawPeerInfoScreen() {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextDatum(TC_DATUM);
+    tft.drawString("Connected Peers", SCREEN_WIDTH / 2, 5, 2); // 标题
+    tft.setTextDatum(TL_DATUM);
+
+    // 绘制返回按钮
+    tft.fillRect(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_W, BACK_BUTTON_H, TFT_DARKGREY);
+    tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString("B", BACK_BUTTON_X + BACK_BUTTON_W / 2, BACK_BUTTON_Y + BACK_BUTTON_H / 2, 2);
+    tft.setTextDatum(TL_DATUM);
+
+    // 绘制本机信息区域
+    int localInfoStartX = 5;
+    int localInfoStartY = 30;
+    int localInfoHeight = 4 * 10 + 5; // 4行文本 + 间距
+    int localInfoWidth = SCREEN_WIDTH - 10;
+    int lineHeight = 10;
+
+    tft.drawRect(localInfoStartX, localInfoStartY, localInfoWidth, localInfoHeight, TFT_DARKGREY);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.setTextFont(1);
+
+    uint8_t myMacAddr[6];
+    esp_wifi_get_mac(WIFI_IF_STA, myMacAddr);
+    char myMacStr[18];
+    sprintf(myMacStr, "%02X:%02X:%02X:%02X:%02X:%02X",
+            myMacAddr[0], myMacAddr[1], myMacAddr[2], myMacAddr[3], myMacAddr[4], myMacAddr[5]);
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5);
+    tft.print("Local MAC: ");
+    tft.print(myMacStr);
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + lineHeight);
+    tft.print("Raw Uptime: ");
+    tft.print(millis() / 1000);
+    tft.print("s");
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + 2 * lineHeight);
+    tft.print("Effective Uptime: ");
+    tft.print((millis() + relativeBootTimeOffset) / 1000);
+    tft.print("s");
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + 3 * lineHeight);
+    tft.print("Memory: ");
+    tft.print(ESP.getFreeHeap() / 1024);
+    tft.print("/");
+    tft.print(ESP.getHeapSize() / 1024);
+    tft.print("KB");
+
+
+    // 绘制对端列表表头
+    int peerListStartX = 5;
+    int peerListStartY = localInfoStartY + localInfoHeight + 10; // 在本机信息下方留出间距
+    int colWidthMac = 100;
+    int colWidthUptime = 60;
+    int colWidthMem = 60;
+    int rowHeight = 15;
+
+    tft.drawString("MAC Address", peerListStartX, peerListStartY, 1);
+    tft.drawString("Uptime(s)", peerListStartX + colWidthMac + 5, peerListStartY, 1);
+    tft.drawString("Free/Total Mem(KB)", peerListStartX + colWidthMac + colWidthUptime + 10, peerListStartY, 1); // 修改标签
+
+    // 绘制分隔线
+    tft.drawLine(peerListStartX, peerListStartY + rowHeight - 2, SCREEN_WIDTH - 5, peerListStartY + rowHeight - 2, TFT_DARKGREY);
+
+
+    // 初始绘制对端列表
+    updatePeerInfoScreen();
+}
+
+void updatePeerInfoScreen() {
+    if (currentUIState != UI_STATE_PEER_INFO) return;
+
+    // 更新本机信息区域
+    int localInfoStartX = 5;
+    int localInfoStartY = 30;
+    int localInfoHeight = 4 * 10 + 5; // 4行文本 + 间距
+    int localInfoWidth = SCREEN_WIDTH - 10;
+    int lineHeight = 10;
+
+    // 清除旧的本机信息区域
+    tft.fillRect(localInfoStartX + 1, localInfoStartY + 1, localInfoWidth - 2, localInfoHeight - 2, TFT_BLACK);
+
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.setTextFont(1);
+
+    uint8_t myMacAddr[6];
+    esp_wifi_get_mac(WIFI_IF_STA, myMacAddr);
+    char myMacStr[18];
+    sprintf(myMacStr, "%02X:%02X:%02X:%02X:%02X:%02X",
+            myMacAddr[0], myMacAddr[1], myMacAddr[2], myMacAddr[3], myMacAddr[4], myMacAddr[5]);
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5);
+    tft.print("Local MAC: ");
+    tft.print(myMacStr);
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + lineHeight);
+    tft.print("Raw Uptime: ");
+    tft.print(millis() / 1000);
+    tft.print("s");
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + 2 * lineHeight);
+    tft.print("Effective Uptime: ");
+    tft.print((millis() + relativeBootTimeOffset) / 1000);
+    tft.print("s");
+
+    tft.setCursor(localInfoStartX + 5, localInfoStartY + 5 + 3 * lineHeight);
+    tft.print("Memory: ");
+    tft.print(ESP.getFreeHeap() / 1024);
+    tft.print("/");
+    tft.print(ESP.getHeapSize() / 1024);
+    tft.print("KB");
+
+
+    // 更新对端列表区域
+    int peerListStartX = 5;
+    int peerListStartY = localInfoStartY + localInfoHeight + 10 + 15; // 在表头下方开始绘制
+    int colWidthMac = 100;
+    int colWidthUptime = 60;
+    int colWidthMem = 60;
+    int rowHeight = 15;
+
+    // 清除旧的对端列表区域 (从表头下方到返回按钮上方)
+    tft.fillRect(peerListStartX, peerListStartY, SCREEN_WIDTH - 10, BACK_BUTTON_Y - peerListStartY - 2, TFT_BLACK);
+
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.setTextFont(1);
+
+    std::vector<PeerInfo_t> peerList = getPeerInfoList(); // 获取对端信息列表
+
+    int currentY = peerListStartY;
+    for (const auto& peer : peerList) {
+        if (currentY + rowHeight > BACK_BUTTON_Y - 2) break; // 避免超出屏幕或覆盖返回按钮
+
+        tft.setCursor(peerListStartX, currentY);
+        tft.print(peer.macAddress);
+
+        tft.setCursor(peerListStartX + colWidthMac + 5, currentY);
+        tft.print(peer.effectiveUptime / 1000); // 显示有效运行时间 (秒)
+
+        tft.setCursor(peerListStartX + colWidthMac + colWidthUptime + 10, currentY);
+        char memBuffer[20];
+        sprintf(memBuffer, "%u/%u", peer.usedMemory / 1024, peer.totalMemory / 1024); // usedMemory 实际上是可用内存
+        tft.print(memBuffer);
+
+        currentY += rowHeight;
+    }
+}
+
+void showPeerInfoScreen() {
+    if (!isScreenOn || inCustomColorMode) return;
+
+    currentUIState = UI_STATE_PEER_INFO;
+    isPeerInfoScreenVisible = true;
+    drawPeerInfoScreen(); // 绘制界面骨架和初始数据
+}
+
+void hidePeerInfoScreen() {
+    if (currentUIState != UI_STATE_PEER_INFO) return;
+
+    currentUIState = UI_STATE_MAIN;
+    isPeerInfoScreenVisible = false;
+    redrawMainScreen(); // 返回主界面并重绘
+}
+
+bool isPeerInfoScreenBackButtonPressed(int x, int y) {
+    if (currentUIState != UI_STATE_PEER_INFO) return false;
+     return x >= BACK_BUTTON_X && x <= BACK_BUTTON_X + BACK_BUTTON_W &&
+           y >= BACK_BUTTON_Y && y <= BACK_BUTTON_Y + BACK_BUTTON_H;
 }
 
 

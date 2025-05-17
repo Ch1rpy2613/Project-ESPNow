@@ -36,7 +36,17 @@ typedef struct SyncMessage_s
     long senderOffset;
     TouchData_t touch_data;
     uint16_t totalPointsForSync; // 新增：用于同步开始时告知总点数
+    uint32_t usedMemory;         // 新增：发送方已用内存 (字节)
+    uint32_t totalMemory;        // 新增：发送方总内存 (字节)
 } SyncMessage_t;
+
+// 新增：存储对端详细信息的结构体
+typedef struct PeerInfo_s {
+    String macAddress;
+    unsigned long effectiveUptime;
+    uint32_t usedMemory;
+    uint32_t totalMemory;
+} PeerInfo_t;
 
 
 // ESP-NOW 相关全局变量 (声明为 extern)
@@ -46,6 +56,7 @@ extern std::queue<SyncMessage_t> incomingMessageQueue;
 extern DrawingHistory allDrawingHistory;
 extern std::set<String> macSet; // 用于设备计数，由 ESP-NOW 填充
 extern std::map<String, unsigned long> peerLastHeartbeat; // 新增：存储每个对端的最后心跳时间
+extern std::map<String, PeerInfo_t> peerInfoMap; // 新增：存储所有已知对端详细信息的 map
 
 extern unsigned long lastKnownPeerUptime;
 extern long lastKnownPeerOffset;
@@ -69,12 +80,13 @@ extern unsigned long lastRemoteDrawTime; // 远程最后绘制时间 (用于以�
 // 函数声明
 void espNowInit(); // ESP-NOW 初始化
 void OnSyncDataSent(const uint8_t *mac_addr, esp_now_send_status_t status); // 发送回调
-void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len); // 接收回调
+void OnSyncDataRecv(const esp_now_recv_info *info, const uint8_t *incomingDataPtr, int len); // 接收回调
 void sendSyncMessage(const SyncMessage_t *msg); // 发送同步消息的辅助函数
 void processIncomingMessages(); // 处理接收到的消息队列
 void replayAllDrawings();       // 重播所有绘图历史 (需要 tft 对象)
 void sendHeartbeat(); // 新增：发送心跳包
 void checkPeerHeartbeatTimeout(); // 新增：检查对端心跳超时
+std::vector<PeerInfo_t> getPeerInfoList(); // 新增：获取对端信息列表
 
 // 注意: replayAllDrawings 函数依赖于在 esp_now_handler.cpp 中可访问的全局 tft 对象和 drawMainInterface 函数。
 

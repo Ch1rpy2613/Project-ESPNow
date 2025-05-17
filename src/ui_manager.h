@@ -5,19 +5,30 @@
 #include <TFT_eSPI.h>
 #include <set>               // For std::set
 #include <string>            // For String (used in std::set<String> macSet)
-#include "esp_now_handler.h" // For TouchData_t, macSet, allDrawingHistory, relativeBootTimeOffset, replayAllDrawings
+#include "esp_now_handler.h" // For TouchData_t, macSet, allDrawingHistory, relativeBootTimeOffset, replayAllDrawings, PeerInfo_t, peerInfoMap
 #include "power_manager.h" // 包含电源管理器头文件，用于 isScreenOn
 #include "drawing_history.h" // 包含自定义绘图历史头文件
+#include <map> // For std::map
+#include <vector> // For std::vector (if needed for peer list display)
 
-// --- Extern Global Variables ---
-// These are defined in Project-ESPNow.ino or other modules and used here.
-extern TFT_eSPI tft; // Defined in Project-ESPNow.ino
+// UI 状态枚举
+enum UIState_e {
+    UI_STATE_MAIN,         // 主绘图界面
+    UI_STATE_COLOR_PICKER, // 颜色选择器界面
+    UI_STATE_POPUP,        // 弹窗界面 (例如项目信息或 Coffee)
+    UI_STATE_PEER_INFO     // 对端信息界面
+};
+typedef enum UIState_e UIState_t;
+
+// 当前 UI 状态变量，将在 ui_manager.cpp 中定义
+extern UIState_t currentUIState;
 
 // UI state variables that will be defined in ui_manager.cpp
 extern uint32_t currentColor;      // 当前画笔颜色
 extern bool inCustomColorMode;     // 是否处于自定义颜色模式
 extern bool isDebugInfoVisible;    // 调试信息框是否可见
 extern bool showDebugToggleButton; // 是否显示调试信息切换按钮
+extern bool isPeerInfoScreenVisible; // 对端信息界面是否可见
 
 // 进度条状态变量
 extern int sendProgressTotal;      // 发送总数
@@ -35,7 +46,8 @@ extern int blueValue;               // 蓝色通道值 (0-255)
 extern uint16_t *savedScreenBuffer; // 用于保存调色界面覆盖区域的屏幕缓冲
 
 // Variables from other modules needed by UI functions
-extern std::set<String> macSet;                    // 来自 esp_now_handler.h (用于设备计数)
+extern std::set<String> macSet;                    // 来自 esp_now_handler.h (用于设备计数，对端详细信息存储在 peerInfoMap 中)
+extern std::map<String, PeerInfo_t> peerInfoMap; // 来自 esp_now_handler.h (存储对端详细信息)
 extern DrawingHistory allDrawingHistory; // 来自 esp_now_handler.h (用于调试信息)
 extern long relativeBootTimeOffset;                // 来自 esp_now_handler.h (用于调试信息)
 // isScreenOn (如果 drawDebugInfo 需要) 会通过包含 power_manager.h 在 ui_manager.cpp 中获得
@@ -49,7 +61,7 @@ void uiManagerInit(); // UI 相关初始化占位符 (TFT 初始化之外)
 void drawMainInterface();
 void drawResetButton();
 void drawColorButtons();
-void drawSleepButton();       // 显示来自 macSet 的设备数量
+void drawPeerInfoButton();    // 显示对端信息按钮 (可能显示连接设备数)
 void drawCustomColorButton(); // 显示当前颜色
 void drawStarButton();        // 显示当前颜色, 自定义颜色入口的占位符
 
@@ -66,12 +78,20 @@ void drawCoffeeButton();      // 绘制 "Coffee" 按钮
 void showCoffeePopup();       // 显示 "Coffee" 弹窗
 void hideCoffeePopup();       // 隐藏 "Coffee" 弹窗
 
+// 对端信息界面函数
+void drawPeerInfoScreen();
+void updatePeerInfoScreen();
+void showPeerInfoScreen();
+void hidePeerInfoScreen();
+
+
 // 按钮按下检测函数 (基于坐标)
 bool isResetButtonPressed(int x, int y);
 bool isColorButtonPressed(int x, int y, uint32_t &selectedColor); // 输出选中的颜色
-bool isSleepButtonPressed(int x, int y);
+bool isPeerInfoButtonPressed(int x, int y); // 检测对端信息按钮是否被按下
+bool isPeerInfoScreenBackButtonPressed(int x, int y); // 检测对端信息界面返回按钮是否被按下 - 新增声明
 bool isCustomColorButtonPressed(int x, int y); // 用于进入自定义颜色模式
-bool isBackButtonPressed(int x, int y);        // 用于退出自定义颜色模式
+bool isBackButtonPressed(int x, int y);        // 用于退出自定义颜色模式 (主要用于调色盘)
 bool isDebugToggleButtonPressed(int x, int y); // 检测调试信息切换按钮是否被按下
 bool isInfoButtonPressed(int x, int y);    // 检测项目信息按钮是否被按下
 bool isCoffeeButtonPressed(int x, int y);  // 检测 "Coffee" 按钮是否被按下
